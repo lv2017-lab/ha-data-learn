@@ -1,0 +1,30 @@
+alias: Learn Data Bot - Gửi nhắc hẹn
+description: >-
+  Mỗi phút kiểm tra các lịch hẹn đã đến giờ trên Learn Data Server và gửi tin
+  nhắc vào đúng nhóm Zalo đã đặt lịch. Cần rest_command reminders_due_get và
+  reminder_sent (file rest_command 19 lệnh) + add-on Learn Data Server 1.6.0.
+mode: single
+triggers:
+  - trigger: time_pattern
+    minutes: '/1'
+actions:
+  - action: rest_command.reminders_due_get
+    response_variable: due_resp
+    continue_on_error: true
+  - condition: template
+    value_template: >-
+      {{ due_resp is defined and due_resp.status == 200 and due_resp.content
+      is mapping and (due_resp.content.get('items') | length) > 0 }}
+  - repeat:
+      for_each: "{{ due_resp.content.get('items') }}"
+      sequence:
+        - action: zalo_bot.send_message
+          data:
+            type: '1'
+            thread_id: '{{ repeat.item.group_id }}'
+            account_selection: '+84334503457'
+            message: '⏰ Nhắc anh: {{ repeat.item.content }}'
+        - action: rest_command.reminder_sent
+          data:
+            id: '{{ repeat.item.id }}'
+          continue_on_error: true

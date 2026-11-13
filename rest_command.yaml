@@ -1,0 +1,131 @@
+# File nay de DAT TEN la rest_command.yaml trong thu muc /homeassistant
+# (cung cho voi configuration.yaml), khi configuration.yaml co dong:
+#   rest_command: !include rest_command.yaml
+# Vi la file include nen KHONG co khoa "rest_command:" o dau file.
+# Thay <IP-MAY-HAOS> bang IP LAN cua chinh may HAOS (IP ban mo HA trong mang LAN,
+# khong phai ten mien lv2017.io.vn). Neu add-on khong dat token thi giu nguyen
+# cac dong comment headers. Neu co dat token thi xoa dau # o 2 dong headers.
+
+print_learn_save:
+  url: "http://192.168.1.31:8765/learn"
+  method: post
+  content_type: "application/json"
+  #headers:
+  #  X-Token: "doi-thanh-token-cua-ban"
+  payload: '{{ {"code": code, "text": text, "group_id": group_id} | tojson }}'
+
+print_learn_lookup:
+  url: "http://192.168.1.31:8765/lookup?code={{ code }}&group_id={{ group_id }}"
+  method: get
+  #headers:
+  #  X-Token: "doi-thanh-token-cua-ban"
+
+print_learn_delete:
+  url: "http://192.168.1.31:8765/learn?code={{ code }}&group_id={{ group_id }}"
+  method: delete
+  #headers:
+  #  X-Token: "doi-thanh-token-cua-ban"
+
+print_log_save:
+  url: "http://192.168.1.31:8765/log"
+  method: post
+  content_type: "application/json"
+  #headers:
+  #  X-Token: "doi-thanh-token-cua-ban"
+  payload: '{{ {"device": device, "position": position, "machine": machine, "note": note, "date": date, "group_id": group_id} | tojson }}'
+
+print_log_query:
+  url: "http://192.168.1.31:8765/logs?q={{ q | urlencode }}&limit=10&group_id={{ group_id }}"
+  method: get
+  #headers:
+  #  X-Token: "doi-thanh-token-cua-ban"
+
+print_log_update:
+  url: "http://192.168.1.31:8765/log/update"
+  method: post
+  content_type: "application/json"
+  #headers:
+  #  X-Token: "doi-thanh-token-cua-ban"
+  payload: '{{ {"id": id, "device": device, "position": position, "machine": machine, "note": note, "date": date} | tojson }}'
+
+print_log_delete_id:
+  url: "http://192.168.1.31:8765/log?id={{ id }}"
+  method: delete
+  #headers:
+  #  X-Token: "doi-thanh-token-cua-ban"
+
+print_log_delete_date:
+  url: "http://192.168.1.31:8765/logs?date={{ date | urlencode }}&group_id={{ group_id }}"
+  method: delete
+  #headers:
+  #  X-Token: "doi-thanh-token-cua-ban"
+
+bot_names_get:
+  url: "http://192.168.1.31:8765/bot-names?group_id={{ group_id }}"
+  method: get
+  #headers:
+  #  X-Token: "MAT_KHAU_TOKEN_CUA_BAN"
+bot_names_replace:
+  url: "http://192.168.1.31:8765/bot-names/replace"
+  method: post
+  content_type: "application/json"
+  payload: '{{ {"names": names, "group_id": group_id} | tojson }}'
+  #headers:
+  #  X-Token: "MAT_KHAU_TOKEN_CUA_BAN"
+bot_names_add:
+  url: "http://192.168.1.31:8765/bot-names/add"
+  method: post
+  content_type: "application/json"
+  payload: '{{ {"name": name, "group_id": group_id} | tojson }}'
+  #headers:
+  #  X-Token: "MAT_KHAU_TOKEN_CUA_BAN"
+bot_names_remove:
+  url: "http://192.168.1.31:8765/bot-names/remove"
+  method: post
+  content_type: "application/json"
+  payload: '{{ {"name": name, "group_id": group_id} | tojson }}'
+  #headers:
+  #  X-Token: "MAT_KHAU_TOKEN_CUA_BAN"
+
+memory_epoch_get:
+  url: "http://192.168.1.31:8765/memory-epoch?group_id={{ group_id }}"
+  method: get
+  #headers:
+  #  X-Token: "MAT_KHAU_TOKEN_CUA_BAN"
+memory_epoch_bump:
+  url: "http://192.168.1.31:8765/memory-epoch/bump"
+  method: post
+  content_type: "application/json"
+  payload: '{{ {"group_id": group_id} | tojson }}'
+  #headers:
+  #  X-Token: "MAT_KHAU_TOKEN_CUA_BAN"
+
+reminder_save:
+  url: "http://192.168.1.31:8765/reminder"
+  method: post
+  content_type: "application/json"
+  payload: '{ {"group_id": group_id, "content": content, "remind_at": remind_at} | tojson }'
+  #headers:
+#  X-Token: <redacted>
+reminders_due_get:
+  url: "http://192.168.1.31:8765/reminders/due"
+  method: get
+  #headers:
+#  X-Token: <redacted>
+reminder_sent:
+  url: "http://192.168.1.31:8765/reminder/sent"
+  method: post
+  content_type: "application/json"
+  payload: '{ {"id": id} | tojson }'
+  #headers:
+#  X-Token: <redacted>
+reminders_list:
+  url: "http://192.168.1.31:8765/reminders?group_id={{ group_id }}"
+  method: get
+  #headers:
+#  X-Token: <redacted>
+reminder_delete:
+  url: "http://192.168.1.31:8765/reminder?id={{ id }}&group_id={{ group_id }}"
+  method: delete
+  #headers:
+#  X-Token: <redacted>

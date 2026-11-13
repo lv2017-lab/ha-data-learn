@@ -1,0 +1,3226 @@
+alias: Learn Data Bot V8
+description: >-
+  Learn Data Bot - Kho loi may in + AI + Nhat ky sua chua + Phan tich anh (goi ten bot la tra loi)
+triggers:
+  - trigger: webhook
+    webhook_id: -uDqEAQOREUiLyScdTJTYuiJ6
+    allowed_methods:
+      - POST
+      - PUT
+      - GET
+      - HEAD
+    local_only: false
+conditions:
+  - condition: template
+    value_template: >-
+      {% set j = trigger.get('json', {}) %} {% set d = j.get('data', {}) %}
+      {% set craw = d.get('content', '') %} {% set content = (craw if craw
+      is string else '') | trim %} {% set gid = d.get('idTo', '') | string
+      | trim %} {% set allowed = ['5983799972549184973', 'GROUP_ID_2',
+      'GROUP_ID_3', 'GROUP_ID_4'] %} {% set is_image = craw is mapping and
+      (craw.get('href', '') | string).startswith('http') %} {{ gid in
+      allowed and j.get('isSelf', true) == false and (content != '' or
+      is_image) }}
+actions:
+  - variables:
+      reply_thread_id: >-
+        {% set j = trigger.get('json', {}) %} {% set d = j.get('data', {}) %}
+        {{ d.get('idTo') | default('', true) | string | trim }}
+  - variables:
+      bot_name: 'lyly'
+      image_enabled: true
+  - variables:
+      raw_message: >
+        {{ trigger.get('json', {}).get('data', {}).get('content', '') | string |
+        trim }}
+  - variables:
+      user_message: >
+        {{ raw_message | replace('@Aibot', '') | replace('@aibot', '') |
+        replace('@AIBOT', '') | regex_replace('(?i)^@?' ~ bot_name ~
+        '[,: ]*', '') | regex_replace('(?i)^ơi[, ]*', '') | trim }}
+  - variables:
+      msg: '{{ user_message | upper | trim }}'
+  - variables:
+      has_tag: '{{ ''@aibot'' in (raw_message | lower) }}'
+  - variables:
+      is_called: >-
+        {{ has_tag or (raw_message | lower) is search('(^|[^a-z])' ~
+        (bot_name | lower) ~ '([ ,:.!?]|$)') }}
+      image_url: >-
+        {% set c = trigger.get('json', {}).get('data', {}).get('content',
+        '') %}{{ c.get('href', '') if c is mapping else '' }}
+      is_image: "{{ image_enabled and (image_url | string | trim) != '' }}"
+  - if:
+      - condition: template
+        value_template: "{{ (raw_message | trim) != '' }}"
+    then:
+      - action: rest_command.bot_names_get
+        data:
+          group_id: '{{ reply_thread_id }}'
+        response_variable: names_resp
+        continue_on_error: true
+  - variables:
+      dyn_names: >-
+        {% if names_resp is defined and names_resp.status == 200 and
+        names_resp.content is mapping and names_resp.content.get('names')
+        %}{{ names_resp.content.get('names') }}{% else %}{{ ['Lyly', 'Ly
+        Ly', 'Ly Ky'] }}{% endif %}
+      user_message: >-
+        {% set q0 = raw_message | replace('@Aibot', '') |
+        replace('@aibot', '') | replace('@AIBOT', '') %} {% set ns =
+        namespace(q=q0) %} {% for n in dyn_names %} {% set ns.q = ns.q |
+        regex_replace('(?i)^@?' ~ n ~ '[,: ]*', '') %} {% endfor %} {{
+        ns.q | regex_replace('(?i)^ơi[, ]*', '') |
+        regex_replace('(?i)^ơii[, ]*', '') | trim }}
+      msg: '{{ user_message | upper | trim }}'
+      is_called: >-
+        {% set low = raw_message | lower %} {% set ns = namespace(found =
+        has_tag) %} {% for n in dyn_names %} {% if low is
+        search('(^|[^a-zà-ỹ])' ~ (n | lower) ~ '([ ,:.!?]|$)') %} {% set
+        ns.found = true %} {% endif %} {% endfor %} {{ ns.found }}
+      bot_name: "{{ dyn_names[0] if dyn_names else 'lyly' }}"
+      is_rename: "{{ is_called and msg.startswith('ĐỔI TÊN') }}"
+      rename_names: >-
+        {% set t = user_message | regex_replace('(?i)^đổi tên( bot)?\\s*',
+        '') | regex_replace('(?is)^.*thành\\s*:?\\s*', '') %} {% set parts
+        = t | replace(' hoặc ', ',') | replace(' và ', ',') %} {% set lst =
+        parts.split(',') %} {{ lst | map('trim') | reject('eq', '') | list }}
+      rename_csv: "{{ rename_names | join(',') }}"
+      is_add_name: "{{ is_called and msg.startswith('THÊM TÊN') }}"
+      add_name: >-
+        {{ user_message | regex_replace('(?i)^thêm tên\\s*:?\\s*', '') | trim }}
+      is_del_name: >-
+        {{ is_called and (msg.startswith('XÓA TÊN') or
+        msg.startswith('BỎ TÊN')) }}
+      del_name: >-
+        {{ user_message | regex_replace('(?i)^(xóa|bỏ) tên\\s*:?\\s*', '') |
+        trim }}
+  - if:
+      - condition: template
+        value_template: "{{ (raw_message | trim) != '' }}"
+    then:
+      - action: rest_command.memory_epoch_get
+        data:
+          group_id: '{{ reply_thread_id }}'
+        response_variable: mem_resp
+        continue_on_error: true
+  - variables:
+      mem_epoch: >-
+        {% if mem_resp is defined and mem_resp.status == 200 and
+        mem_resp.content is mapping %}{{ mem_resp.content.get('epoch', 0)
+        | int }}{% else %}0{% endif %}
+      is_wipe_memory: >-
+        {{ is_called and (msg.startswith('XÓA GHI NHỚ') or
+        msg.startswith('XÓA TRÍ NHỚ') or msg.startswith('QUÊN HẾT')) }}
+  - variables:
+      rem_rel: >-
+        {% set m = user_message | regex_findall('(?i)sau\\s+(\\d{1,4})\\s*(phút|giờ|tiếng)') %}{{ m[0] if m else [] }}
+      rem_rel_num: "{{ rem_rel[0] | int if rem_rel else 0 }}"
+      rem_rel_unit: "{{ rem_rel[1] if rem_rel else '' }}"
+      rem_hh: >-
+        {% set a = user_message | regex_findall('(?i)(\\d{1,2})\\s*(?:h|giờ)\\s*(\\d{1,2})?') %}{% set b = user_message | regex_findall('(\\d{1,2}):(\\d{2})') %}{% if a %}{{ a[0][0] | int }}{% elif b %}{{ b[0][0] | int }}{% else %}-1{% endif %}
+      rem_mm: >-
+        {% set a = user_message | regex_findall('(?i)(\\d{1,2})\\s*(?:h|giờ)\\s*(\\d{1,2})?') %}{% set b = user_message | regex_findall('(\\d{1,2}):(\\d{2})') %}{% if a %}{{ (a[0][1] | int) if a[0][1] else 0 }}{% elif b %}{{ b[0][1] | int }}{% else %}0{% endif %}
+      rem_has_time: "{{ rem_rel_num > 0 or (rem_hh >= 0 and rem_hh <= 23 and rem_mm <= 59) }}"
+      rem_tomorrow: "{{ 'NGÀY MAI' in msg }}"
+      rem_date: >-
+        {% set dm = msg | regex_findall('(\\d{1,2})/(\\d{1,2})') %}{{ dm[0] if dm else [] }}
+      rem_ts: >-
+        {% set base = now() %}{% if rem_rel_num > 0 %}{% set t = base + (timedelta(minutes=rem_rel_num) if rem_rel_unit == 'phút' else timedelta(hours=rem_rel_num)) %}{{ as_timestamp(t) | int }}{% else %}{% set hh = rem_hh if 0 <= rem_hh <= 23 else 0 %}{% set mm = rem_mm if 0 <= rem_mm <= 59 else 0 %}{% set t = base.replace(hour=hh, minute=mm, second=0, microsecond=0) %}{% set dd = rem_date[0] | int if rem_date else 0 %}{% set mo = rem_date[1] | int if rem_date else 0 %}{% if 1 <= dd <= 31 and 1 <= mo <= 12 %}{% set t = t.replace(day=1).replace(month=mo) + timedelta(days=dd - 1) %}{% elif rem_tomorrow or t <= base %}{% set t = t + timedelta(days=1) %}{% endif %}{{ as_timestamp(t) | int }}{% endif %}
+      rem_when: "{{ rem_ts | timestamp_custom('%H:%M %d/%m/%Y') }}"
+      rem_content: >-
+        {{ user_message | regex_replace('(?i)sau\\s+\\d{1,4}\\s*(phút|giờ|tiếng)', ' ') | regex_replace('(?i)ngày\\s+\\d{1,2}/\\d{1,2}(/\\d{2,4})?', ' ') | regex_replace('\\d{1,2}/\\d{1,2}(/\\d{2,4})?', ' ') | regex_replace('(?i)ngày mai|hôm nay', ' ') | regex_replace('(?i)\\d{1,2}\\s*(h|giờ)\\s*\\d{0,2}\\s*(phút)?', ' ') | regex_replace('\\d{1,2}:\\d{2}', ' ') | regex_replace('(?i)\\blúc\\b', ' ') | regex_replace('(?i)(nhớ\\s+)?nhắc\\s+(tôi|anh|em)\\b', ' ') | regex_replace('(?i)^\\s*nhắc\\s+', ' ') | regex_replace('\\s+', ' ') | regex_replace('^[\\s,;:.]+|[\\s,;:.]+$', '') | trim }}
+      is_reminder: "{{ is_called and 'NHẮC' in msg and rem_has_time }}"
+      is_reminder_list: "{{ is_called and ('LỊCH HẸN' in msg or 'LỊCH NHẮC' in msg) and not is_reminder }}"
+      rem_cancel_id: >-
+        {% set c = msg | regex_findall('#(\\d+)') %}{{ c[0] | int if c else 0 }}
+      is_reminder_cancel: "{{ is_called and ('HỦY LỊCH' in msg or 'HUỶ LỊCH' in msg or 'XÓA LỊCH' in msg) }}"
+
+  - variables:
+      is_learn: >-
+        {{ is_called and (msg.startswith('HỌC') or msg.startswith('GHI NHỚ') or
+        msg.startswith('GHI NHO') or msg.startswith('SỬA MÃ')) }}
+      is_forget: >-
+        {{ is_called and (msg.startswith('XÓA HỌC') or msg.startswith('XOA HOC')
+        or msg.startswith('QUÊN MÃ')) }}
+      request_code: >-
+        {% set codes = msg | regex_findall('([A-Z]{1,3}[0-9]{1,4})') %}{{ codes[0]
+        if codes else '' }}
+      learn_text: >-
+        {{ user_message | regex_replace('(?i)^học\\s*:?\\s*[EWF][0-9]{2,4}\\s*[:\\-]\\s*',
+        '') | regex_replace('(?i)^ghi nhớ\\s*:?\\s*[EWF][0-9]{2,4}\\s*[:\\-]\\s*',
+        '') | regex_replace('(?i)^ghi nho\\s*:?\\s*[EWF][0-9]{2,4}\\s*[:\\-]\\s*',
+        '') | trim }}
+        {{ user_message | regex_replace('(?i)^học\\s*:\\s*', '') |
+        regex_replace('(?i)^ghi nhớ\\s*:\\s*', '') |
+        regex_replace('(?i)^ghi nho\\s*:\\s*', '') | trim }}
+  - variables:
+      learn_stored_text: >-
+        {% set t = user_message | regex_replace('(?i)^học\\s*:?\\s*[A-Z]{1,3}[0-9]{1,4}\\s*[:\\-]\\s*',
+        '') | regex_replace('(?i)^sửa mã\\s*:?\\s*[A-Z]{1,3}[0-9]{1,4}\\s*[:\\-]\\s*',
+        '') | regex_replace('(?i)^ghi nhớ\\s*:?\\s*[A-Z]{1,3}[0-9]{1,4}\\s*[:\\-]\\s*',
+        '') | regex_replace('(?i)^ghi nho\\s*:?\\s*[A-Z]{1,3}[0-9]{1,4}\\s*[:\\-]\\s*',
+        '') | regex_replace('(?i)^(học|sửa mã|ghi nhớ|ghi nho)\\s*:\\s*',
+        '') %} {% set p = t.split(' - ') %} {% set nd = p[0] | trim %}
+        {% set hd = p[1:] | join(' - ') | trim %} {% if hd %}{{ '❌ Mã
+        lỗi ' ~ request_code ~ ': ' ~ nd ~ '\n🔧 Hướng xử lý: ' ~ hd
+        }}{% else %}{{ '❌ Mã lỗi ' ~ request_code ~ ': ' ~ nd }}{%
+        endif %}
+  - variables:
+      is_log: "{{ is_called and msg.startswith('NHẬT KÝ') }}"
+      is_log_delete: >-
+        {{ is_called and not is_learn and msg.startswith('XÓA NHẬT KÝ') }}
+      log_del_date: >-
+        {% set dd = msg |
+        regex_findall('([0-9]{1,2}/[0-9]{1,2}/[0-9]{4})') %}{{ dd[0] if dd
+        else '' }}
+      log_del_id: >-
+        {% set t = user_message | regex_replace('(?i)^xóa nhật ký\s*:?\s*',
+        '') | regex_replace('[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}', '') %} {% set nn
+        = t | regex_findall('([0-9]+)') %}{{ nn[0] if nn else '' }}
+      is_log_query: >-
+        {{ is_called and not is_learn and not is_log and not is_log_delete and
+        (msg.startswith('TRA NHẬT KÝ') or msg.startswith('LỊCH SỬ') or msg is
+        search('ĐÃ THAY|THAY THẾ NHỮNG|THAY NHỮNG GÌ')) }}
+      log_raw: >-
+        {{ user_message | regex_replace('(?i)^nhật ký\s*:?\s*', '') | trim }}
+      log_nparts: >-
+        {% set r = user_message | regex_replace('(?i)^nhật ký\s*:?\s*', '') %}{{ r.split('|') | length }}
+      log_query_text: >-
+        {{ user_message | regex_replace('(?i)^tra nhật ký\s*:?\s*', '') |
+        regex_replace('(?i)^lịch sử\s*:?\s*', '') | trim }}
+      log_q: >-
+        {{ log_query_text |
+        regex_replace('(?i)(đã\s+thay(\s+thế)?|thay\s+thế)(\s+những)?(\s+gì)?',
+        '') | regex_replace('\\?', '') | regex_replace('\\s+', ' ') | trim }}
+      ai_ctx: ''
+      wants_history: >-
+        {{ is_called and not is_learn and not is_forget and not is_log_delete and msg is
+        search('THAY|LỊCH SỬ|NHẬT KÝ|DÂY CHUYỀN|BẢO TRÌ|SỬA CHỮA|HỎNG') }}
+  - variables:
+      log_device: >-
+        {% set r = user_message | regex_replace('(?i)^nhật ký\s*:?\s*', '') %}
+        {{ r.split('|')[0] | trim }}
+      log_p1: >-
+        {% set r = user_message | regex_replace('(?i)^nhật ký\s*:?\s*', '') %}
+        {% set p = r.split('|') %}{{ p[1] | trim if p | length > 1
+        else '' }}
+      log_p2: >-
+        {% set r = user_message | regex_replace('(?i)^nhật ký\s*:?\s*', '') %}
+        {% set p = r.split('|') %}{{ p[2] | trim if p | length > 2
+        else '' }}
+      log_p3: >-
+        {% set r = user_message | regex_replace('(?i)^nhật ký\s*:?\s*', '') %}
+        {% set p = r.split('|') %}{{ p[3] | trim if p | length > 3
+        else '' }}
+      log_p4: >-
+        {% set r = user_message | regex_replace('(?i)^nhật ký\s*:?\s*', '') %}
+        {% set p = r.split('|') %}{{ p[4] | trim if p | length > 4
+        else '' }}
+  - variables:
+      log_position: >-
+        {% set r = user_message | regex_replace('(?i)^nhật ký\s*:?\s*', '') %}
+        {% set p = r.split('|') %}{{ (p[1] | trim if p | length > 1
+        else '') | regex_replace('(?i)DC\s?[1-4]', '') | trim }}
+      log_machine: >-
+        {% set r = user_message | regex_replace('(?i)^nhật ký\s*:?\s*', '') %}
+        {% set p = r.split('|') %}{% set p2 = p[2] | trim if p |
+        length > 2 else '' %}{% set src = (p2 ~ ' ' ~ r) if p | length >= 4
+        else r %}{% set mm = src |
+        regex_findall('(?i)(?:DC|DÂY CHUYỀN|CHUYỀN)\s?([1-4])') %}{{ 'DC'
+        ~ mm[0] if mm else '' }}
+      log_note: >-
+        {% set r = user_message | regex_replace('(?i)^nhật ký\s*:?\s*', '') %}
+        {% set p = r.split('|') %}{% set p2 = p[2] | trim if p |
+        length > 2 else '' %}{% set p3 = p[3] | trim if p | length > 3 else
+        '' %}{% if p | length >= 4 %}{{ p3 }}{% elif p | length == 3 %}{{ ''
+        if p2 is match('(?i)^DC\\s?[1-4]$') or p2 is
+        match('^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$') else p2 }}{% endif %}
+      log_date_in: >-
+        {% set r = user_message | regex_replace('(?i)^nhật ký\s*:?\s*', '') %}
+        {% set p = r.split('|') %}{% if p | length >= 5 %}{{ p[4] |
+        trim }}{% else %}{% set dd = r |
+        regex_findall('([0-9]{1,2}/[0-9]{1,2}/[0-9]{4})') %}{{ dd[0] if dd
+        else '' }}{% endif %}
+  - variables:
+      is_log_dash: >-
+        {% set r = user_message | regex_replace('(?i)^nhật ký\\s*:?\\s*',
+        '') %}{{ is_log and (' - ' in r) and ('|' not in r) }}
+      d_machine: >-
+        {% set r = user_message | regex_replace('(?i)^nhật ký\\s*:?\\s*',
+        '') %} {% set p = r.split(' - ') %} {% set s0 = p[0] | trim %}
+        {% set rest = s0 | regex_replace('(?i)^máy\\s+', '') %} {{ rest
+        if rest is match('(?i)^(dc|dây chuyền|[0-9])') else s0 }}
+      d_device: >-
+        {% set r = user_message | regex_replace('(?i)^nhật ký\\s*:?\\s*',
+        '') %} {% set p = r.split(' - ') %} {{ (p[1] | trim if p |
+        length > 1 else '') | regex_replace('(?i)^thay( thế)?\\s+(thiết
+        bị\\s+)?', '') | trim }}
+      d_date: >-
+        {% set r = user_message | regex_replace('(?i)^nhật ký\\s*:?\\s*',
+        '') %} {% set p = r.split(' - ') %} {% set cand = p[3] | trim if
+        p | length > 3 else '' %} {% set cand2 = p[2] | trim if p |
+        length > 2 else '' %} {% if cand is
+        match('^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$') %}{{ cand }}{% elif
+        cand2 is match('^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$') %}{{ cand2
+        }}{% else %}{{ '' }}{% endif %}
+      d_position: >-
+        {% set r = user_message | regex_replace('(?i)^nhật ký\\s*:?\\s*',
+        '') %} {% set p = r.split(' - ') %} {% set cand2 = p[2] | trim
+        if p | length > 2 else '' %} {{ '' if cand2 is
+        match('^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$') else cand2 }}
+      d_note: >-
+        {% set r = user_message | regex_replace('(?i)^nhật ký\\s*:?\\s*',
+        '') %} {% set p = r.split(' - ') %} {% set cand = p[3] | trim if
+        p | length > 3 else '' %} {% set head = [cand] if cand and not
+        (cand is match('^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$')) else [] %}
+        {{ (head + p[4:]) | join(' - ') | trim }}
+  - variables:
+      log_device: "{{ d_device if is_log_dash else log_device }}"
+      log_position: "{{ d_position if is_log_dash else log_position }}"
+      log_machine: "{{ d_machine if is_log_dash else log_machine }}"
+      log_note: "{{ d_note if is_log_dash else log_note }}"
+      log_date_in: "{{ d_date if is_log_dash else log_date_in }}"
+  - variables:
+      is_log_edit: "{{ is_called and msg.startswith('SỬA NHẬT KÝ') }}"
+      edit_body: >-
+        {{ user_message | regex_replace('(?i)^sửa nhật ký[ ]*:?[ ]*#?[ ]*',
+        '') | trim }}
+      edit_id: >-
+        {% set nn = edit_body | regex_findall('^([0-9]+)') %}{{ nn[0] if nn
+        else '' }}
+      edit_raw: >-
+        {{ edit_body | regex_replace('^[0-9]+[ ]*:?[ ]*', '') | trim }}
+      edit_nparts: >-
+        {% set r = (user_message | regex_replace('(?i)^sửa nhật ký[ ]*:?[ ]*#?[ ]*', '') | regex_replace('^[0-9]+[ ]*:?[ ]*', '')) %}{{ r.split('|') | length }}
+  - variables:
+      edit_device: >-
+        {% set r = (user_message | regex_replace('(?i)^sửa nhật ký[ ]*:?[ ]*#?[ ]*', '') | regex_replace('^[0-9]+[ ]*:?[ ]*', '')) %}
+        {{ r.split('|')[0] | trim }}
+      edit_p1: >-
+        {% set r = (user_message | regex_replace('(?i)^sửa nhật ký[ ]*:?[ ]*#?[ ]*', '') | regex_replace('^[0-9]+[ ]*:?[ ]*', '')) %}
+        {% set p = r.split('|') %}{{ p[1] | trim if p | length > 1
+        else '' }}
+      edit_p2: >-
+        {% set r = (user_message | regex_replace('(?i)^sửa nhật ký[ ]*:?[ ]*#?[ ]*', '') | regex_replace('^[0-9]+[ ]*:?[ ]*', '')) %}
+        {% set p = r.split('|') %}{{ p[2] | trim if p | length > 2
+        else '' }}
+      edit_p3: >-
+        {% set r = (user_message | regex_replace('(?i)^sửa nhật ký[ ]*:?[ ]*#?[ ]*', '') | regex_replace('^[0-9]+[ ]*:?[ ]*', '')) %}
+        {% set p = r.split('|') %}{{ p[3] | trim if p | length > 3
+        else '' }}
+      edit_p4: >-
+        {% set r = (user_message | regex_replace('(?i)^sửa nhật ký[ ]*:?[ ]*#?[ ]*', '') | regex_replace('^[0-9]+[ ]*:?[ ]*', '')) %}
+        {% set p = r.split('|') %}{{ p[4] | trim if p | length > 4
+        else '' }}
+  - variables:
+      edit_position: >-
+        {% set r = (user_message | regex_replace('(?i)^sửa nhật ký[ ]*:?[ ]*#?[ ]*', '') | regex_replace('^[0-9]+[ ]*:?[ ]*', '')) %}
+        {% set p = r.split('|') %}{{ (p[1] | trim if p | length > 1
+        else '') | regex_replace('(?i)DC\s?[1-4]', '') | trim }}
+      edit_machine: >-
+        {% set r = (user_message | regex_replace('(?i)^sửa nhật ký[ ]*:?[ ]*#?[ ]*', '') | regex_replace('^[0-9]+[ ]*:?[ ]*', '')) %}
+        {% set p = r.split('|') %}{% set p2 = p[2] | trim if p |
+        length > 2 else '' %}{% set src2 = (p2 ~ ' ' ~ r) if p | length >=
+        4 else r %}{% set mm = src2 |
+        regex_findall('(?i)(?:DC|DÂY CHUYỀN|CHUYỀN)\s?([1-4])') %}{{ 'DC'
+        ~ mm[0] if mm else '' }}
+      edit_note: >-
+        {% set r = (user_message | regex_replace('(?i)^sửa nhật ký[ ]*:?[ ]*#?[ ]*', '') | regex_replace('^[0-9]+[ ]*:?[ ]*', '')) %}
+        {% set p = r.split('|') %}{% set p2 = p[2] | trim if p |
+        length > 2 else '' %}{% set p3 = p[3] | trim if p | length > 3 else
+        '' %}{% if p | length >= 4 %}{{ p3 }}{% elif p | length == 3 %}{{ ''
+        if p2 is match('(?i)^DC\\s?[1-4]$') or p2 is
+        match('^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$') else p2 }}{% endif %}
+      edit_date_in: >-
+        {% set r = (user_message | regex_replace('(?i)^sửa nhật ký[ ]*:?[ ]*#?[ ]*', '') | regex_replace('^[0-9]+[ ]*:?[ ]*', '')) %}
+        {% set p = r.split('|') %}{% if p | length >= 5 %}{{ p[4] |
+        trim }}{% else %}{% set dd = r |
+        regex_findall('([0-9]{1,2}/[0-9]{1,2}/[0-9]{4})') %}{{ dd[0] if dd
+        else '' }}{% endif %}
+  - variables:
+      error_db:
+        E03: |
+          ⚠️ E03 – Lỗi tải firmware DSP / DSP không nhận IP / Card DSP hỏng.
+
+          🔧 Hướng xử lý:
+          1. ⚠️ Không được tắt nguồn máy khi đang xử lý lỗi này.
+          2. Rút giắc nguồn 24V DC trên card DSP.
+          3. Cắm lại giắc nguồn 24V DC trên card DSP.
+          4. Kiểm tra lại hoạt động của DSP.
+          5. Nếu vẫn lỗi, thay card DSP theo quy trình kỹ thuật.
+        E05: |
+          ⚠️ E05 – Lỗi đọc hình ảnh DSP.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra file RIP và kiểu máy có tương thích không.
+          2. Load lại file RIP.
+          3. Nếu vẫn lỗi, kiểm tra lại file hình ảnh và cấu hình máy.
+        E09: |
+          ⚠️ E09 – Lỗi bộ điều khiển DSP / lỗi đọc hình ảnh file.
+
+          🔧 Hướng xử lý theo Subcode:
+          - Subcode 15 – Hàng đợi in đầy:
+            Hiệu chỉnh cảm biến nhận gạch đầu vào.
+          - Subcode 16 – Nhóm in trống:
+            Hiệu chỉnh cảm biến nhận gạch đầu vào.
+          - Subcode 34 – Tham số có giá trị ngoài phạm vi:
+            Kiểm tra khoảng cách giữa hai viên gạch, đặc biệt khi hai viên quá gần nhau.
+          - Subcode 38 – Lưu trữ đồng bộ hóa máy chủ:
+            Giảm tốc độ băng tải
+          - Subcode 40 – Waveform chưa được khởi tạo:
+            Tải lại waveform.
+          - Nếu lỗi liên quan file in:
+            Xóa tất cả file in và file test rồi RIP lại.
+          - Nếu không hết lỗi, liên hệ KTV
+        E11: |
+          ⚠️ E11 – Báo lỗi cảm biến in.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra cảm biến in.
+          2. Kiểm tra tốc độ giải mã DSP.
+          3. Có thể xóa mẫu và Add lại mẫu hoặc khởi động lại máy in.
+          4. Nếu không hết lỗi, liên hệ KTV.
+        E14: >
+          ⚠️ E14 – Nhiệt độ quá cao.
+
+          🔧 Hướng xử lý: 1. Kiểm tra nhiệt độ trong bình mực 2. Lỗi xảy ra khi
+          cảm biến nhiệt độ trong thùng cao hơn 85°C. 3. Kiểm tra lại cảm biến
+          nhiệt độ bình mực ( có thể rút xoay jack cảm biến ra và cắm lại), để
+          reset lại nhiệt độ. 4. Nếu rút jack ra cắm lại mà ko hết. KTV thay cảm
+          biến nhiệt độ mới.
+        E17: |
+          ⚠️ E17 – Lỗi cấu hình CAN.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra cáp mạng CAN.
+          2. Kiểm tra các đầu nối CAN.
+          3. Nếu vẫn lỗi, kiểm tra cấu hình CAN.
+        E18: |
+          ⚠️ E18 – CAN không tìm thấy.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra cáp mạng CAN.
+          2. Kiểm tra các đầu nối CAN.
+          3. Kiểm tra xem node/thiết bị có được BẬT hay không.
+          4. Nếu lỗi vẫn còn, thay card theo quy trình kỹ thuật.
+       
+        E22: >
+          ⚠️ E22 – Lỗi thanh hút mực hoặc khay Cap hứng mực.
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra thanh gạt hút vệ sinh đầu in đã về đúng vị trí chưa. Nếu
+          chưa đúng liên hệ ktv căn chỉnh reset lại đểm gốc của thanh gạt.
+          Mục: Configuration => Motor => Head Cleaner => Search For Zero Position => OK
+          2. Kiểm tra khay Cap hứng mực đã về đúng vị trí chưa.
+          3. Kiểm tra sensor vị trí báo ZZZ hoặc Giọt nước trên màn hình chính.
+          4. Đưa đúng vị trí rồi Reset Alarm.
+          5. Các bước trên kiểm tra đã Ok. Máy vẫn báo lỗi E22. Vào mục
+          PLC => chọn Update Distribution => rồi khởi động lại máy in.
+          6. Nếu không hoạt động, liên hệ KTV.
+
+        E23: |
+          ⚠️ E23 – Thời gian cấp mực cho ống quá dài.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra dòng mực từ thùng đến bình trên.
+          2. Kiểm tra đường ống cấp mực.
+          3. Kiểm tra khả năng cấp mực và tình trạng van/bơm nếu cần.
+       
+        E25: >
+          ⚠️ E25 – Bảo vệ nhiệt Biến tần máy hút hoặc Bơm Degas
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra aptomat (CB) của tủ điện phía sau xem có CB nào nhảy ko?
+          2. Kiểm tra nguyên nhân gây bảo vệ nhiệt.
+          3. Chỉ thao tác điện khi đã đảm bảo an toàn và cô lập nguồn theo quy
+          trình.
+          4. Nếu không hoạt động, liên hệ KTV.
+
+        E27: |
+          ⚠️ E27 – Khí nén yếu
+
+          🔧 Hướng xử lý:
+          1. Cấp đủ khí nén cho máy in từ 4,5 Bar.
+          2. Kiểm tra đường ống khí nén có bị rò rỉ không.
+          3. Báo Trực ca Cơ Điện kiểm tra nguồn khí nén nhà máy.
+          4. Nếu không có khí nén vẫn muốn chạy máy in. hãy làm bước sau:
+          ( cài đặt cảnh báo áp suất thấp từ 4,5Bar xuống 0 Bar)
+             - Giảm áp suất cài đặt xuống 0 Bar.
+             - Nhấn 2 lần phím P.
+             - Cài N1 = 0.
+             - Dùng phím lên/xuống để chỉnh giá trị.
+          5. Nếu vẫn lỗi, liên hệ KTV.
+          
+        E31: >
+          ⚠️ E31 – Dừng dòng trước thời gian trong hai lần giặt ở trạng thái "Tự
+          động".
+
+          🔧 Hướng xử lý: 
+          1. Kiểm tra giá trị tham số. 
+          2. Sửa đổi giá trị tham số theo quy trình kỹ thuật.
+          3. Nếu không hoạt động, liên hệ KTV.
+          
+        E33: |
+          ⚠️ E33 – Không thể làm sạch.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra thanh in đã được đặt đúng vị trí chưa.
+          2. Đưa thanh in về đúng vị trí.
+          3. Thực hiện lại quá trình làm sạch.
+          
+        E35: |
+          ⚠️ E35 – Không thể nhập trạng thái in, bỏ qua kích hoạt.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra trạng thái máy.
+          2. Kiểm tra điều kiện để chuyển sang trạng thái in.
+          3. Kiểm tra các cảnh báo đang tồn tại.
+          
+        E37: |
+          ⚠️ E37 – Không thể thực hiện quy trình làm sạch vì đang có báo động.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra các Alarm đang tồn tại.
+          2. Xử lý nguyên nhân của Alarm trước.
+          3. Sau khi hết Alarm, thực hiện lại quy trình làm sạch.
+        E42: |
+          ⚠️ E42 – Lỗi nội bộ trong quá trình khởi tạo card FirePulse.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra thiết bị FirePulse có được BẬT không.
+          2. Kiểm tra hệ thống dây điện.
+          3. Kiểm tra cấu hình các công tắc DIP.
+          4. Nếu lỗi vẫn còn, thay card FirePulse theo quy trình kỹ thuật.
+        E43: |
+          ⚠️ E43 – Lỗi cài đặt tham số FirePulse.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra tham số hiện tại có gây quá áp không.
+          2. Kiểm tra tham số hiện tại có gây điện áp thấp không.
+          3. Kiểm tra kênh có được bật và có nguồn hay không.
+          4. Kiểm tra file waveform có tồn tại trên máy không.
+          5. Điều chỉnh tham số/waveform theo cấu hình kỹ thuật.
+          
+        E44: |
+          ⚠️ E44 – Nhấn và giữ nút khẩn cấp dạng nấm.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nút Emergency Stop.
+          2. Xả/nhả nút khẩn cấp dạng nấm.
+          3. Kiểm tra điều kiện an toàn trước khi chạy lại máy.
+          
+        E48: |
+          ⚠️ E48 – Device Disconnect: Mất kết nối các module PLC.
+
+          🔧 Hướng xử lý:
+          1. Tắt máy và khởi động lại.
+          2. Kiểm tra kết nối các module PLC.
+          3. Nếu không được, liên hệ KTV.
+          
+        E53: |
+          ⚠️ E53 – Không thể thực hiện vệ sinh thủ công.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra đầu in đã được chọn chưa.
+          2. Chọn đúng đầu in.
+          3. Thực hiện lại vệ sinh thủ công.
+          
+        E54: |
+          ⚠️ E54 – Lỗi nhiệt độ hoặc nguồn thấp của card FirePulse.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra kênh bị lỗi: điện áp thấp hoặc không vào điện.
+          2. Kiểm tra nguồn 150V.
+          3. Kiểm tra cầu chì trên card FirePulse.
+          4. Kiểm tra hệ thống làm mát nếu liên quan đến nhiệt độ.
+          5. Nếu không hết, liên hệ KTV.
+          
+        E55: |
+          ⚠️ E55 – Lỗi nội bộ card Carrier Sapphire.
+
+          🔧 Hướng xử lý:
+          1. Nhấn nút Reset trên card.
+          2. Kiểm tra lại hoạt động.
+          3. Nếu vẫn lỗi, liên hệ KTV.
+          
+        E59: |
+          ⚠️ E59 – Hộp mực báo lỗi mức 1.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra lượng mực trong thùng có quá cao không.
+          2. Kiểm tra van M16.5.
+          3. Kiểm tra cảm biến mức mực.
+          4. Kiểm tra bình mực trên và bình mực dưới.
+          5. Nếu không hết, liên hệ KTV.
+          
+        E60: |
+          ⚠️ E60 – Lỗi mực mức 2 / báo động mực.
+
+          🔧 Hướng xử lý:
+          1. Xử lý tương tự E59.
+          2. Kiểm tra lượng mực trong thùng.
+          3. Kiểm tra van M16.5.
+          4. Kiểm tra cảm biến mức mực.
+          
+        E66: |
+          ⚠️ E66 – Cạnh nhạy cảm / khẩn cấp.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra khu vực cảm biến/cạnh an toàn.
+          2. Kiểm tra xem có vật cản hoặc tác động lên cạnh nhạy cảm không.
+          3. Khôi phục điều kiện an toàn trước khi chạy máy.
+          
+        E67: |
+          ⚠️ E67 – DSP lỗi hình ảnh.
+
+          🔧 Hướng xử lý:
+          1. Tải lại hình ảnh.
+          2. Kiểm tra file hình ảnh và cấu hình RIP.
+          3. Nếu vẫn lỗi, kiểm tra DSP.
+          
+        E69: |
+          ⚠️ E69 – Bình tách nước đầy.
+
+          🔧 Hướng xử lý:
+          1. Xả/đổ nước trong bình.
+          2. Nếu xả hết nước mà vẫn báo E69 kiểm tra lại cảm biến mức.
+          3. Chỉnh lại cảm biến:
+             - Hết nước: 1 đèn.
+             - Đầy nước: 2 đèn.
+          
+        E70: |
+          ⚠️ E70 – Không thể thực hiện vệ sinh khi bơm tải đang tắt.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra bơm tải.
+          2. Mở/bật bơm.
+          3. Thực hiện lại quá trình vệ sinh.
+          
+        E72: >
+          ⚠️ E72 – Không có tín hiệu phát hiện / trạng thái lỗi không còn được
+          nhìn thấy bởi bộ điều khiển.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra chi tiết Alarm/Subcode trên giao diện.
+
+          2. Kiểm tra tín hiệu cảm biến và thiết bị liên quan.
+
+          3. Reset Alarm.
+
+          4. Nếu lỗi quay lại, liên hệ KTV.
+          
+        E73: |
+          ⚠️ E73 – Lỗi khởi tạo card FirePulse.
+
+          🔧 Hướng xử lý:
+          1. Khởi động lại card FirePulse.
+          2. Rút nguồn điện của card theo quy trình kỹ thuật an toàn.
+          3. Cấp lại nguồn và kiểm tra.
+          4. Nếu vẫn lỗi, liên hệ KTV.
+        E74: |
+          ⚠️ E74 – Bơm mực hộp mực 1 bị cưỡng bức đóng.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nguyên nhân bơm bị đóng.
+          2. Mở bơm.
+          3. Kiểm tra áp suất và dòng mực.
+          
+        E75: |
+          ⚠️ E75 – Bơm mực hộp mực 2 bị cưỡng bức đóng.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nguyên nhân bơm bị đóng.
+          2. Mở bơm.
+          3. Kiểm tra áp suất và dòng mực.
+          
+        E76: |
+          ⚠️ E76 – Bơm mực hộp mực 3 bị cưỡng bức đóng.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nguyên nhân bơm bị đóng.
+          2. Mở bơm.
+          3. Kiểm tra áp suất và dòng mực.
+        E77: |
+          ⚠️ E77 – Bơm mực hộp mực 4 bị cưỡng bức đóng.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nguyên nhân bơm bị đóng.
+          2. Mở bơm.
+          3. Kiểm tra áp suất và dòng mực.
+        E78: |
+          ⚠️ E78 – Bơm mực hộp mực 5 bị cưỡng bức đóng.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nguyên nhân bơm bị đóng.
+          2. Mở bơm.
+          3. Kiểm tra áp suất và dòng mực.
+        E79: |
+          ⚠️ E79 – Bơm mực hộp mực 6 bị cưỡng bức đóng.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nguyên nhân bơm bị đóng.
+          2. Mở bơm.
+          3. Kiểm tra áp suất và dòng mực.
+        E80: |
+          ⚠️ E80 – Sự kiện tắt máy cưỡng bức gây nóng.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra hệ thống gia nhiệt.
+          2. Bật nhiệt.
+          3. Kiểm tra nhiệt độ trước khi đưa máy vào sản xuất.
+        E81: |
+          ⚠️ E81 – Chạy không bắt đầu / chưa nhấn nút START.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra đèn nút START.
+          2. Nhấn nút START.
+          3. Kiểm tra đèn xanh báo OK.
+          4. Nếu không được, liên hệ KTV.
+          
+        E85: |
+          ⚠️ E85 – Hình ảnh quá lớn.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra kích thước file hình ảnh.
+          2. Giảm kích thước/độ phân giải hình ảnh phù hợp với cấu hình máy.
+          3. RIP lại file nếu cần.
+        E87: |
+          ⚠️ E87 – Bơm thùng hộp mực 1 bị cưỡng bức đóng.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra bơm thùng.
+          2. Mở máy bơm thùng.
+          3. Kiểm tra dòng mực và áp suất.
+        E88: |
+          ⚠️ E88 – Bơm thùng hộp mực 2 bị cưỡng bức đóng.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra bơm thùng.
+          2. Mở máy bơm thùng.
+          3. Kiểm tra dòng mực và áp suất.
+        E89: |
+          ⚠️ E89 – Bơm thùng hộp mực 3 bị cưỡng bức đóng.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra bơm thùng.
+          2. Mở máy bơm thùng.
+          3. Kiểm tra dòng mực và áp suất.
+        E90: |
+          ⚠️ E90 – Bơm thùng hộp mực 4 bị cưỡng bức đóng.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra bơm thùng.
+          2. Mở máy bơm thùng.
+          3. Kiểm tra dòng mực và áp suất.
+        E91: |
+          ⚠️ E91 – Bơm thùng hộp mực 5 bị cưỡng bức đóng.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra bơm thùng.
+          2. Mở máy bơm thùng.
+          3. Kiểm tra dòng mực và áp suất.
+        E92: |
+          ⚠️ E92 – Bơm thùng hộp mực 6 bị cưỡng bức đóng.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra bơm thùng.
+          2. Mở máy bơm thùng.
+          3. Kiểm tra dòng mực và áp suất.
+        E93: |
+          ⚠️ E93 – Yêu cầu cập nhật phần mềm card FirePulse.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra phiên bản phần mềm card FirePulse.
+          2. Thực hiện cập nhật theo quy trình kỹ thuật.
+          3. Nếu không thực hiện được, liên hệ KTV.
+        E94: |
+          ⚠️ E94 – Lỗi kết nối với ổ cắm / kết nối mạng.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra cáp Ethernet.
+          2. Kiểm tra kết nối PLC.
+          3. Kiểm tra switch và các đầu nối mạng.
+        E95: |
+          ⚠️ E95 – Lỗi giao thức lệnh trong quá trình chuyển động động cơ.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra cơ cấu/đĩa có hết vị trí hay không.
+          2. Kiểm tra đĩa có đang ở vị trí làm sạch không.
+          3. Kiểm tra có nắp trên đầu in không.
+          4. Đưa cơ cấu về đúng vị trí rồi thử lại.
+        E96: |
+          ⚠️ E96 – Động cơ báo động phổ quát / lỗi dây encoder.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra động cơ băng tải hoặc Drive phía sau máy.
+          2. Kiểm tra dây encoder.
+          3. Kiểm tra gạch có vật cản Barrier không.
+          4. Kiểm tra tình trạng Drive.
+          5. Nếu vẫn lỗi, liên hệ KTV.
+        E97: |
+          ⚠️ E97 – Kiểm tra báo động trục động cơ.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra lỗi tracking.
+          2. Kiểm tra Drive đã Ready chưa.
+          3. Kiểm tra lệnh cảm biến có phát quá sớm không.
+          4. Kiểm tra dây encoder.
+          5. Kiểm tra gạch có vật cản Barrier không.
+          6. Nếu vẫn lỗi, liên hệ KTV.
+        E98: |
+          ⚠️ E98 – Lỗi động cơ băng tải hoặc Drive phía sau máy.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nhiệt độ có vượt ngưỡng không.
+          2. Kiểm tra lỗi phanh động cơ.
+          3. Kiểm tra lỗi truyền thông tới Drive.
+          4. Kiểm tra độ lệch theo dõi vị trí.
+          5. Kiểm tra Drive.
+          6. Kiểm tra dây encoder.
+          7. Kiểm tra gạch có vật cản Barrier không.
+        E99: |
+          ⚠️ E99 – An toàn: Báo động chung.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra toàn bộ mạch an toàn.
+          2. Kiểm tra các nút Emergency Stop và thiết bị bảo vệ.
+          3. Xử lý nguyên nhân trước khi Reset Alarm.
+        E101: |
+          ⚠️ E101 – An toàn: Lỗi giao tiếp.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra hệ thống dây và thiết bị an toàn.
+          2. Kiểm tra giao tiếp của hệ thống Safety.
+          3. Không bypass mạch an toàn khi chưa có quy trình được phê duyệt.
+        E106: |
+          ⚠️ E106 – Hộp mực 1: Lỗi kiểm soát áp suất tấm lưỡi liềm.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra áp suất.
+          2. Kiểm tra bơm chân không và đường ống.
+          3. Kiểm tra cảm biến áp suất.
+        E107: |
+          ⚠️ E107 – Hộp mực 2: Lỗi kiểm soát áp suất tấm lưỡi liềm.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra áp suất.
+          2. Kiểm tra bơm chân không và đường ống.
+          3. Kiểm tra cảm biến áp suất.
+        E108: |
+          ⚠️ E108 – CAN ADS: Lỗi nội bộ.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra mạng CAN.
+          2. Kiểm tra card/module ADS.
+          3. Nếu vẫn lỗi, liên hệ KTV.
+          
+        E109: >
+          ⚠️ E109 – Lỗi hệ thống bơm Vaccum Pump ( Bơm chân không)
+
+          🔧 Hướng xử lý:
+
+          1. Thay thế loại trừ bơm chân không.
+          2. Nếu thay bơm vẫn không được. kiểm tra lại đường ống bơm chân không
+          từ trên Bar Reservoi xuống Cụm van bơm chân không. ( Thay thế đường ông
+          nếu cần loại trừ)
+          3. Nếu đường ống Ok mà ko được. Kiêm tra lại cụm van xả mực ở cạnh bơm 
+          xem có bị lỗi không. ( Thay thế Van nếu hỏng).
+          4. Xử lý các bước trên mà vẫn không được. Kiểm tra lại tín hiệu điều khiển
+          bơm Vaccum ( Kiểm tra tín hiệu điều khiển từ Module PLC xuống). Thay thế
+          nếu Module PLC điều khiển hỏng.
+          5. Nếu không được, liên hệ KTV.
+          
+        E110: >
+          ⚠️ E110 – Lỗi kiểm soát áp suất tấm lưỡi liềm – hộp mực 2 / bơm chân
+          không.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra áp suất bơm chân không.
+
+          2. Kiểm tra đường ống chân không.
+
+          3. Kiểm tra bơm và cảm biến áp suất.
+        E111: >
+          ⚠️ E111 – Lỗi kiểm soát áp suất tấm lưỡi liềm – hộp mực 3 / bơm chân
+          không.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra áp suất bơm chân không.
+
+          2. Kiểm tra đường ống chân không.
+
+          3. Kiểm tra bơm và cảm biến áp suất.
+        E112: >
+          ⚠️ E112 – Lỗi kiểm soát áp suất tấm lưỡi liềm – hộp mực 4 / bơm chân
+          không.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra áp suất bơm chân không.
+
+          2. Kiểm tra đường ống chân không.
+
+          3. Kiểm tra bơm và cảm biến áp suất.
+        E113: >
+          ⚠️ E113 – Lỗi kiểm soát áp suất tấm lưỡi liềm – hộp mực 5 / bơm chân
+          không.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra áp suất bơm chân không.
+
+          2. Kiểm tra đường ống chân không.
+
+          3. Kiểm tra bơm và cảm biến áp suất.
+        E114: >
+          ⚠️ E114 – Lỗi kiểm soát áp suất tấm lưỡi liềm – hộp mực 6 / bơm chân
+          không.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra áp suất bơm chân không.
+
+          2. Kiểm tra đường ống chân không.
+
+          3. Kiểm tra bơm và cảm biến áp suất.
+        E115: |
+          ⚠️ E115 – General Alarm: Báo lỗi Module PLC.
+
+          🔧 Hướng xử lý:
+          1. Tắt nguồn và khởi động lại.
+          2. Kiểm tra module PLC.
+          3. Nếu không hết, liên hệ KTV.
+        E116: |
+          ⚠️ E116 – Card FirePulse: Lỗi cấp nguồn 24V.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nguồn 24V.
+          2. Kiểm tra bảo vệ nhiệt.
+          3. Kiểm tra dây và đầu nối nguồn card FirePulse.
+          4. Nếu vẫn lỗi, liên hệ KTV.
+        E117: |
+          ⚠️ E117 – Card FirePulse: Lỗi cấp nguồn 230V.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nguồn 230V.
+          2. Kiểm tra bảo vệ nhiệt.
+          3. Kiểm tra dây và đầu nối nguồn card FirePulse.
+          4. Chỉ thao tác điện khi đã cô lập nguồn và đảm bảo an toàn.
+        E118: |
+          ⚠️ E118 – Kiểm tra nhiệt độ tủ điều khiển.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nhiệt độ trong tủ điều khiển.
+          2. Kiểm tra quạt và điều hòa tủ.
+          3. Kiểm tra cảm biến nhiệt độ.
+        E119: |
+          ⚠️ E119 – Lỗi điều chỉnh xung / điều hòa tủ FirePulse.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra điều hòa cánh tủ điện.
+          2. Kiểm tra nhiệt độ tủ FirePulse.
+          3. Máy thường khoảng 28°C ngắt và 32°C đóng Block.
+          4. Dùng biện pháp làm mát tạm thời an toàn nếu cần.
+          5. Làm phiếu yêu cầu sửa điều hòa.
+          6. Liên hệ KTV nếu không hết.
+        E120: >
+          ⚠️ E120 – Lỗi cảm biến Barrier Hoặc báo chồng gạch
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra chồng gạch đầu vào máy in, nếu có xử lý chồng gạch theo
+          đúng quy trình 
+
+          2. Nếu không có gạch vẫn báo E120. Kiểm tra căn chỉnh sensor thu phát
+          sao cho hai cảm biến song song và đối diện nhau.
+
+          3. Giá trị báo trên bộ giải mã cần đạt vùng màu xanh cao nhất. ( Cảm
+          biến thu báo 2 đèn tín hiệu Powe + Aligimen)
+
+          3. Nếu màn hình hiển thị báo giá trị Error. Hướng dẫn Khôi phục cài
+          đặt gốc bộ đọc Barrier  Giữ đồng thời SET + PRESET => Nhấn mũi tên
+          sang ngang → rSt → Mode => Nhấn mũi tên sang ngang → init → Mode → OK.
+
+          6. Nếu căn chỉnh và khôi phục không được, thay thiết bị mới và liên hệ
+          KTV.
+        E121: |
+          ⚠️ E121 – An toàn: Lỗi đầu vào nhạy cảm.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra thiết bị/cảm biến đầu vào an toàn.
+          2. Kiểm tra dây và đầu nối.
+          3. Không bypass mạch Safety khi chưa có quy trình được phê duyệt.
+        E122: |
+          ⚠️ E122 – An toàn: Lỗi đầu vào nút khẩn cấp dạng nấm.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nút Emergency Stop.
+          2. Kiểm tra dây và mạch Safety.
+          3. Nhả nút khẩn cấp nếu đang bị tác động.
+        E123: |
+          ⚠️ E123 – An toàn: Lỗi nhóm 3.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra thiết bị thuộc nhóm Safety 3.
+          2. Kiểm tra dây và đầu nối.
+          3. Không bypass mạch an toàn.
+        E124: |
+          ⚠️ E124 – An toàn: Lỗi nhóm 4.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra thiết bị thuộc nhóm Safety 4.
+          2. Kiểm tra dây và đầu nối.
+          3. Không bypass mạch an toàn.
+        E125: |
+          ⚠️ E125 – An toàn: EDM1.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra mạch EDM1.
+          2. Kiểm tra thiết bị an toàn và dây kết nối.
+        E126: |
+          ⚠️ E126 – An toàn: EDM2.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra mạch EDM2.
+          2. Kiểm tra thiết bị an toàn và dây kết nối.
+        E127: |
+          ⚠️ E127 – An toàn: Vượt quá nhiệt độ tối đa.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nhiệt độ hệ thống.
+          2. Kiểm tra nguyên nhân quá nhiệt.
+          3. Chỉ chạy lại khi điều kiện nhiệt độ an toàn.
+        E128: |
+          ⚠️ E128 – An toàn: Nhiệt độ dưới mức tối thiểu cho phép.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra hệ thống gia nhiệt.
+          2. Kiểm tra cảm biến nhiệt độ.
+          3. Đưa nhiệt độ về vùng cho phép trước khi chạy.
+        E129: |
+          ⚠️ E129 – An toàn: Chênh lệch nhiệt độ quá cao giữa các điểm đo.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra các cảm biến nhiệt độ.
+          2. So sánh nhiệt độ giữa các điểm đo.
+          3. Kiểm tra hệ thống gia nhiệt/làm mát.
+        E130: |
+          ⚠️ E130 – An toàn: Điện áp cấp microC1 vượt mức tối đa.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nguồn cấp microC1.
+          2. Kiểm tra nguồn có vượt giới hạn không.
+          3. Không tiếp tục vận hành nếu nguồn bất thường.
+        E131: |
+          ⚠️ E131 – An toàn: Điện áp cấp microC2 vượt mức tối đa.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nguồn cấp microC2.
+          2. Kiểm tra nguồn có vượt giới hạn không.
+          3. Không tiếp tục vận hành nếu nguồn bất thường.
+        E132: |
+          ⚠️ E132 – An toàn: Điện áp cấp microC1 dưới mức tối thiểu.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nguồn cấp microC1.
+          2. Kiểm tra dây và đầu nối.
+          3. Kiểm tra nguồn có đạt mức yêu cầu không.
+        E133: |
+          ⚠️ E133 – An toàn: Điện áp cấp microC2 dưới mức tối thiểu.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nguồn cấp microC2.
+          2. Kiểm tra dây và đầu nối.
+          3. Kiểm tra nguồn có đạt mức yêu cầu không.
+        E134: >
+          ⚠️ E134 – An toàn: Lỗi đầu ra 1.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra tải đang bật.
+
+          2. Kiểm tra dòng điện có dưới mức tối thiểu hoặc trên mức tối đa
+          không.
+
+          3. Kiểm tra dây và thiết bị đầu ra.
+        E159: |
+          ⚠️ E159 – Đang bật Bypass.
+
+          🔧 Hướng xử lý:
+          Tắt Bypass khi chuyển chế độ in.
+        E166: |
+          ⚠️ E166 – Lỗi kết nối LAN card FirePulse.
+
+          🔧 Hướng xử lý:
+          1. Reset Alarm.
+          2. Kiểm tra jack LAN.
+          3. Vệ sinh và cắm lại jack.
+          4. Kiểm tra dây LAN và đèn báo kết nối.
+          5. Nếu không được, liên hệ KTV.
+        E168: |
+          ⚠️ E168 – Quá nhiệt gạch.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nhiệt độ sấy.
+          2. Tăng cường quạt làm mát dây chuyền.
+          3. Reset Alarm.
+        E171: |
+          ⚠️ E171 – Lỗi cảm biến ánh sáng khi bắt đầu in.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra cảm biến ánh sáng đầu vào.
+          2. Thực hiện B56.2 – hiệu chuẩn rào cản cảm biến ánh sáng đầu vào.
+          3. Kiểm tra căn chỉnh cảm biến.
+          4. Nếu vẫn lỗi, liên hệ KTV.
+        E173: |
+          ⚠️ E173 – Kiểm tra mức mực của bình mực và bình trên.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra mức mực bình mực.
+          2. Kiểm tra mức mực bình trên.
+          3. Kiểm tra cảm biến mức và van cấp mực.
+        E174: |
+          ⚠️ E174 – Lỗi Card DSP.
+
+          🔧 Hướng xử lý:
+          1. Tắt máy in và khởi động lại.
+          2. Nếu không được, liên hệ KTV.
+        E175: |
+          ⚠️ E175 – Thiếu kết nối DSP.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra kết nối DSP.
+          2. Kiểm tra dây/kết nối mạng liên quan.
+          3. Tắt máy và khởi động lại.
+          4. Nếu không hết, liên hệ KTV.
+        E177: |
+          ⚠️ E177 – Cleaning Required BarX.
+
+          🔧 Hướng xử lý:
+          1. Không tự ý thay đổi thời gian vệ sinh 3 giờ/lần.
+          2. Đóng Cap vệ sinh tự động.
+          3. Vệ sinh máy in.
+          4. Máy có thể hoạt động bình thường sau khi hoàn tất vệ sinh.
+        E182: |
+          ⚠️ E182 – Hình ảnh được tải có độ phân giải khác nhau.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra các hình ảnh trong cột đôi.
+          2. Hai hình ảnh phải có cùng độ phân giải.
+          3. Chỉnh lại file hình ảnh/RIP rồi tải lại.
+        E183: |
+          ⚠️ E183 – Hình ảnh được tải có độ rộng khác nhau.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra các hình ảnh trong cột đôi.
+          2. Hai hình ảnh phải có cùng độ rộng.
+          3. Chỉnh lại file hình ảnh/RIP rồi tải lại.
+        E184: |
+          ⚠️ E184 – Không thể kích hoạt hàng đợi sản xuất.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra hàng đợi sản xuất.
+          2. Nếu hàng đợi trống, kiểm tra và tải file hình ảnh.
+          3. Nếu hàng đợi không trống, thử xóa file in và file test rồi RIP lại.
+          4. Add lại mẫu sản xuất nếu cần.
+          5. Nếu không được, liên hệ KTV.
+        E185: >
+          ⚠️ E185 – Tệp cấu hình bị hỏng, các thay đổi mới nhất có thể đã bị
+          mất.
+
+
+          🔧 Hướng xử lý:
+
+          1. Reset card Carrier.
+
+          2. Kiểm tra lại cấu hình máy.
+
+          3. Nếu vẫn lỗi, liên hệ KTV.
+        E186: |
+          ⚠️ E186 – Lỗi card máy in.
+
+          🔧 Hướng xử lý:
+          1. Tắt máy in và khởi động lại.
+          2. Máy đời 2015, 2016 Kiểm tra xem có Board Bộ Đếm Scheda Control Rs232 không.
+          Nếu có kiểm tra và thay thế board bộ đếm trên. ( Nguyên nhân Board lỗi Giải mã 
+          không kịp).
+          3. Máy in đời 2017 trở lên ko có baord Rs232. Cập nhật lại PLC => Update Distribution
+          => khởi động lại máy in. 
+          2. Nếu vẫn lỗi, liên hệ KTV.
+        E189: |
+          ⚠️ E189 – Lỗi giao tiếp EtherCAT.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra cáp của thiết bị EtherCAT.
+          2. Kiểm tra thiết bị có được kết nối hay không.
+          3. Kiểm tra thiết bị EtherCAT có lỗi không.
+          4. Nếu không được, liên hệ KTV.
+        E190: >
+          ⚠️ E190 – Lỗi giai đoạn kích hoạt 150V / lỗi card FirePulse.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra nguồn 150V và 12V.
+
+          2. Kiểm tra mạch công suất trên card FirePulse.
+
+          3. Kiểm tra cầu chì có bị đứt/cháy không.
+
+          4. Đây có thể là lỗi cháy/hỏng card FirePulse.
+
+          5. Nếu xác định card hỏng, thay card FirePulse theo quy trình kỹ
+          thuật.
+
+          6. ⚠️ Khi thao tác với nguồn điện cao áp phải cô lập nguồn và đảm bảo
+          an toàn.
+        E192: |
+          ⚠️ E192 – EtherCAT và giao tiếp CoreDigit thất bại.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra cáp EtherCAT.
+          2. Kiểm tra các đầu nối.
+          3. Kiểm tra giao tiếp CoreDigit.
+          4. Nếu không được, liên hệ KTV.
+        E193: |
+          ⚠️ E193 – Nhận mã khuôn mặt không hợp lệ từ máy dò gạch.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra cấu hình máy dò gạch.
+          2. Kiểm tra tín hiệu nhận dạng.
+          3. Kiểm tra lại kết nối và cấu hình thiết bị.
+        E194: |
+          ⚠️ E194 – Lỗi giao tiếp với PLC, biến giao tiếp không mở.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra giao tiếp PLC.
+          2. Kiểm tra biến giao tiếp.
+          3. Kiểm tra cấu hình PLC.
+          4. Nếu không khắc phục được, liên hệ KTV để đánh giá tình trạng máy.
+        E195: |
+          ⚠️ E195 – Không thể truy xuất file cài đặt máy.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra file cấu hình máy.
+          2. Máy sẽ sử dụng file cấu hình mặc định.
+          3. Nếu lỗi lặp lại, liên hệ KTV để kiểm tra hệ thống.
+        E196: |
+          ⚠️ E196 – Card FirePulse không được đặt/không được nhận.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra card FirePulse.
+          2. Kiểm tra vị trí lắp card và kết nối.
+          3. Kiểm tra nguồn và giao tiếp.
+          4. Nếu card không được nhận, liên hệ KTV.
+        E198: |
+          ⚠️ E198 – Không thể hoàn thành thao tác do đang có cảnh báo.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra các cảnh báo hiện tại.
+          2. Xử lý nguyên nhân của cảnh báo.
+          3. Sau khi hết cảnh báo, thực hiện lại thao tác.
+        E199: |
+          ⚠️ E199 – Không thể gửi lệnh.
+
+          🔧 Hướng xử lý:
+          1. Xem chi tiết cảnh báo bổ sung để xác định lệnh nào không được gửi.
+          2. Xử lý cảnh báo liên quan.
+          3. Thực hiện lại lệnh.
+        E200: >
+          ⚠️ E200 – Số lượng card Sapphire không tương ứng với số lượng cần
+          thiết.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra số lượng card Sapphire.
+
+          2. Kiểm tra card có được nhận đúng không.
+
+          3. Nếu thiếu/hỏng card, liên hệ KTV để thay thế.
+        E201: |
+          ⚠️ E201 – Hộp mực không được đưa vào hoặc không thể kích hoạt.
+
+          🔧 Hướng xử lý:
+          1. Lắp hộp mực đúng vị trí.
+          2. Kiểm tra cảm biến phát hiện hộp mực.
+          3. Kiểm tra hoạt động của cảm biến.
+          4. Kiểm tra trạng thái Tickle/HeadFires nếu liên quan.
+        E202: |
+          ⚠️ E202 – Phát hiện thiết bị có danh tính không hợp lệ trong EtherCAT.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra thiết bị EtherCAT.
+          2. Kiểm tra cấu hình/ID thiết bị.
+          3. Kiểm tra thiết bị có bị thay thế hoặc cấu hình sai không.
+          4. Nếu không khắc phục được, liên hệ KTV.
+        E203: |
+          ⚠️ E203 – Kết nối EtherCAT không chính xác.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra dây EtherCAT.
+          2. Kiểm tra đầu nối và thứ tự kết nối.
+          3. Kiểm tra trạng thái các thiết bị EtherCAT.
+          4. Nếu không được, liên hệ KTV.
+        E204: |
+          ⚠️ E204 – IO bị khóa sau khi EtherCAT thất bại.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nguyên nhân EtherCAT.
+          2. Khắc phục lỗi EtherCAT.
+          3. Reset/khởi động lại theo quy trình.
+          4. Nếu vẫn lỗi, liên hệ KTV.
+        E205: |
+          ⚠️ E205 – EtherCAT: Thất bại dự phòng.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra kết nối EtherCAT.
+          2. Kiểm tra thiết bị và đầu nối.
+          3. Nếu vẫn lỗi, liên hệ KTV.
+        E206: |
+          ⚠️ E206 – EtherCAT: Khung bị thiếu.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra cáp EtherCAT.
+          2. Kiểm tra đầu nối.
+          3. Kiểm tra thiết bị có mất kết nối không.
+          4. Nếu vẫn lỗi, liên hệ KTV.
+        E207: |
+          ⚠️ E207 – EtherCAT: Không gửi được thông tin do thiếu tài nguyên.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra trạng thái EtherCAT.
+          2. Kiểm tra thiết bị và tài nguyên giao tiếp.
+          3. Nếu vẫn lỗi, liên hệ KTV.
+        E208: |
+          ⚠️ E208 – EtherCAT: Lỗi giám sát.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra trạng thái EtherCAT.
+          2. Kiểm tra các thiết bị đầu cuối.
+          3. Kiểm tra cáp và đầu nối.
+          4. Nếu lỗi lặp lại, liên hệ KTV.
+        E209: |
+          ⚠️ E209 – Không tìm thấy trình điều khiển Ethernet.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra Ethernet.
+          2. Kiểm tra driver và card mạng.
+          3. Kiểm tra kết nối với PLC/hệ thống.
+          4. Nếu vẫn lỗi, liên hệ KTV.
+        E210: |
+          ⚠️ E210 – EtherCAT: Lỗi IO, thiết lập lại kích hoạt.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra EtherCAT.
+          2. Kiểm tra IO.
+          3. Reset kích hoạt sau khi xử lý nguyên nhân.
+          4. Nếu vẫn lỗi, liên hệ KTV.
+        E211: |
+          ⚠️ E211 – EtherCAT: Ít nhất một thiết bị đầu cuối đang khởi tạo.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra trạng thái thiết bị EtherCAT.
+          2. Chờ thiết bị hoàn tất khởi tạo.
+          3. Nếu không chuyển trạng thái, kiểm tra cáp và thiết bị.
+        E212: |
+          ⚠️ E212 – EtherCAT: Ít nhất một thiết bị đầu cuối ở trạng thái PREOP.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra thiết bị đang ở PREOP.
+          2. Kiểm tra kết nối EtherCAT.
+          3. Kiểm tra cấu hình thiết bị.
+          4. Nếu không được, liên hệ KTV.
+        E213: |
+          ⚠️ E213 – EtherCAT: Ít nhất một thiết bị đầu cuối ở trạng thái SAFEOP.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra thiết bị đang ở SAFEOP.
+          2. Kiểm tra kết nối EtherCAT.
+          3. Kiểm tra cấu hình thiết bị.
+          4. Nếu không được, liên hệ KTV.
+        E214: |
+          ⚠️ E214 – EtherCAT: Ít nhất một thiết bị đầu cuối đã thất bại.
+
+          🔧 Hướng xử lý:
+          1. Xác định thiết bị EtherCAT bị lỗi.
+          2. Kiểm tra cáp và đầu nối.
+          3. Kiểm tra thiết bị.
+          4. Nếu vẫn lỗi, liên hệ KTV.
+        E215: |
+          ⚠️ E215 – Lỗi trong quá trình vận hành động cơ.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra động cơ.
+          2. Kiểm tra Drive.
+          3. Kiểm tra encoder.
+          4. Kiểm tra vật cản cơ khí/Barrier.
+          5. Nếu không được, liên hệ KTV.
+        E216: |
+          ⚠️ E216 – Thất bại EtherCAT.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra cáp EtherCAT.
+          2. Kiểm tra các đầu nối.
+          3. Kiểm tra thiết bị đầu cuối EtherCAT.
+          4. Khởi động lại theo quy trình.
+          5. Nếu vẫn lỗi, liên hệ KTV.
+        E217: |
+          ⚠️ E217 – Không thể bắt đầu hoặc hoàn thành bước HeadFires.
+
+          🔧 Hướng xử lý:
+          1. Thử lại bước HeadFires.
+          2. Kiểm tra khí nén.
+          3. Kiểm tra trạng thái các hộp mực/đầu in.
+          4. Kiểm tra các cảnh báo liên quan.
+          5. Nếu vẫn lỗi, liên hệ KTV.
+        E219: |
+          ⚠️ E219 – Cảnh báo quá nhiệt.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nhiệt độ các hộp mực, bình mực và đầu in.
+          2. Hệ thống kiểm tra giới hạn nhiệt độ tối đa cho phép khoảng 70°C.
+          3. Kiểm tra nguyên nhân gây quá nhiệt.
+          4. Chỉ vận hành lại khi nhiệt độ nằm trong giới hạn cho phép.
+        E220: |
+          ⚠️ E220 – Lỗi cấu hình CoreDigit.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra cấu hình đầu in.
+          2. Kiểm tra đầu in hoạt động đầu tiên.
+          3. Kiểm tra đầu in hoạt động cuối cùng.
+          4. Nếu không được, liên hệ KTV.
+        E221: >
+          ⚠️ E221 – Giao tiếp với PLC thất bại.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra tín hiệu LAN từ PLC → Switch → Màn hình HMI.
+
+          2. Có thể kiểm tra bằng cách nối trực tiếp dây LAN màu xanh từ PLC →
+          màn hình.
+
+          3. Nếu kết nối trực tiếp được thì có khả năng Switch bị hỏng, cần thay
+          thế.
+
+          4. Nếu vẫn lỗi, cập nhật PLC theo quy trình và khởi động lại hệ thống.
+
+          5. Nếu không được, liên hệ KTV.
+        E225: |
+          ⚠️ E225 – Lỗi xảy ra trong PLC.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra PLC.
+          2. Kiểm tra các cảnh báo PLC liên quan.
+          3. Khởi động lại theo quy trình.
+          4. Nếu vẫn lỗi, liên hệ KTV.
+        E226: |
+          ⚠️ E226 – Máy không ở vị trí in.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra vị trí máy.
+          2. Khi chuyển sang Auto, máy sẽ hạ xuống vị trí in và thử lại.
+          3. Đảm bảo không có vật cản trước khi hạ đầu in.
+        E227: |
+          ⚠️ E227 – Lỗi khi chuyển sang trạng thái Tickle.
+
+          🔧 Hướng xử lý:
+          1. Xem chi tiết cảnh báo bổ sung trên giao diện.
+          2. Xác định card bị lỗi: Sapphire, FirePulse hoặc CoreDigit.
+          3. Kiểm tra card và kết nối tương ứng.
+        E228: |
+          ⚠️ E228 – Cho phép Backup.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra trạng thái CoreDigit.
+          2. Kiểm tra các cảnh báo liên quan.
+        E229: |
+          ⚠️ E229 – Hâm nóng báo động.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra hộp mực, bình mực và đầu in.
+          2. Bật hệ thống gia nhiệt.
+          3. Chờ nhiệt độ đạt điều kiện cho phép trước khi bắt đầu in.
+        E230: |
+          ⚠️ E230 – Nhiệt độ gia nhiệt vượt quá mức báo động cho phép.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nhiệt độ đầu in, bình mực và hộp mực.
+          2. Kiểm tra độ lệch so với nhiệt độ mục tiêu.
+          3. Kiểm tra hoạt động của hệ thống gia nhiệt.
+          4. Điều chỉnh độ lệch tối đa cho phép theo quy trình kỹ thuật.
+        E231: |
+          ⚠️ E231 – Áp suất trong đầu in không đủ.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra áp suất đầu in.
+          2. Kiểm tra bơm và đường ống.
+          3. Kiểm tra rò rỉ.
+          4. Nếu vẫn lỗi, liên hệ KTV.
+        E232: |
+          ⚠️ E232 – Lỗi tải waveform.
+
+          🔧 Hướng xử lý:
+          1. Thử tải lại waveform.
+          2. Kiểm tra tính toàn vẹn dữ liệu waveform trong Sapphire.
+          3. Thử thay đổi waveform nếu phù hợp.
+          4. Nếu vẫn lỗi, liên hệ KTV.
+        E233: >
+          ⚠️ E233 – Không thể hoàn tất thao tác đưa máy về vị trí in vì phát
+          hiện gạch.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra thực tế có gạch trong vùng máy hay không.
+
+          2. Nếu thực sự không có gạch, kiểm tra trạng thái bản sao trống.
+
+          3. Kiểm tra cảm biến phát hiện gạch.
+        E234: |
+          ⚠️ E234 – Lỗi điều chỉnh nhiệt độ card Sapphire.
+
+          🔧 Hướng xử lý:
+          1. Xem chi tiết cảnh báo để xác định đầu in/bộ phận bị lỗi.
+          2. Nếu nhiệt độ đầu in đọc được là 0°C, kiểm tra kết nối cảm biến.
+          3. Nếu nhiệt độ bình mực/đĩa mực >200°C, kiểm tra kết nối cảm biến.
+          4. Kiểm tra dây và cảm biến nhiệt độ.
+        E235: >
+          ⚠️ E235 – Lỗi card Fire Pulse Hoặc Sapphire Carrier hoặc Đầu in, 
+          thường liên quan FirePulse.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra mã lỗi E/W trên hệ thống CoreDigit bằng cách nhấn chữ G
+          trên màn hình hoặc nhấn vào dòng báo lỗi màu đỏ để xem chi tiết.
+
+          2. Nếu báo lỗi mạch công suất FirePulse không hoạt động, kiểm tra card
+          FirePulse.
+
+          3. Có thể xuất hiện lỗi Sapphire Head Error / Board / Error Sync FPGA
+          Head ( Do card Carrier hoặc Đàu in)
+
+          4. Kiểm tra và thay card FirePulse theo quy trình kỹ thuật nếu xác
+          định card hỏng.
+
+          5. Chỉ rút giắc card phía sau tủ điện FirePulse để chạy sản xuất khi
+          có quy trình kỹ thuật được phê duyệt.
+        E236: >
+          ⚠️ E236 – Lỗi card Sapphire Carrier hoặc FirePulse.
+
+
+          🔧 Hướng xử lý:
+
+          1. Bấm vào chữ G xem chi tiết mã lôi. 
+
+          2. Sapphire Node không kết nối được: Khởi động lại máy; nếu vẫn lỗi,
+          liên hệ KTV.
+
+          3. Lỗi ADC SPI: Khởi động lại máy; nếu vẫn lỗi, liên hệ KTV.
+
+          4. Lỗi chương trình XILINX: Khởi động lại máy; nếu vẫn lỗi, liên hệ
+          KTV.
+
+          5. Lỗi khởi tạo PWM: Khởi động lại máy; nếu vẫn lỗi, liên hệ KTV.
+
+          6. FPGA LVDS RX: Kiểm tra đường LVDS giữa card lỗi và card trước.
+
+          7. FPGA LVDS NEXT: Kiểm tra đường LVDS giữa card lỗi và card tiếp
+          theo.
+
+          8. Lỗi lưu dữ liệu vào Flash: Khởi động lại máy; nếu vẫn lỗi, liên hệ
+          KTV.
+
+          9. Mất waveform: Thử lại thao tác Auto; nếu vẫn lỗi, liên hệ KTV.
+
+          10. Không có FirePulse: Thử lại thao tác Auto; nếu vẫn lỗi, liên hệ
+          KTV.
+
+          11. Chỉ bỏ tích E236 trong Config khi có quy trình kỹ thuật cho phép.
+
+          12. Nếu card hỏng, thay card mới theo quy trình.
+        E237: |
+          ⚠️ E237 – Lỗi giao tiếp Sapphire Carrier, FirePulse và DSP.
+
+          🔧 Hướng xử lý:
+          1. Reset tất cả các nút trên card Carrier.
+          2. Kiểm tra kết nối giữa Carrier, FirePulse và DSP.
+          3. ⚠️ Không được tắt nguồn khi chưa có quy trình xử lý phù hợp.
+          4. Nếu vẫn lỗi, liên hệ KTV để kiểm tra/thay thế.
+        E238: >
+          ⚠️ E238 – Giao diện CAN không chính xác.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra cáp mạng CAN.
+
+          2. Kiểm tra tất cả đầu nối CAN đã cắm đúng chưa.
+
+          3. Kiểm tra trở kháng đường CAN, giá trị tham chiếu 60 Ohm.
+
+          4. Kiểm tra bộ điều khiển CAN.
+
+          5. Kiểm tra phiên bản phần mềm EL6751 nếu có cảnh báo liên quan.
+
+          6. Cập nhật module theo phiên bản được System phát hành nếu được yêu
+          cầu.
+        E240: |
+          ⚠️ E240 – Không có nguồn điện chính.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra nguồn điện chính.
+          2. Kiểm tra aptomat/CB và nguồn cấp máy.
+          3. Kiểm tra các nguồn phụ liên quan.
+          4. Chỉ thao tác điện khi đã cô lập nguồn và đảm bảo an toàn.
+        E241: |
+          ⚠️ E241 – Địa chỉ IP bị trùng do cài đặt card sai.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra các địa chỉ IP trong Ethernet nội bộ.
+          2. Xác định card có IP trùng.
+          3. Kiểm tra card có bị cấu hình sai không.
+          4. Nếu card không thể cấu hình đúng, kiểm tra khả năng card bị hỏng.
+          5. Chỉnh IP đúng theo cấu hình hệ thống.
+        E243: |
+          ⚠️ E243 – Lượng phủ/khí thải mực nằm ngoài phạm vi.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra giá trị lượng phủ.
+          2. Đặt giá trị trong phạm vi cho phép.
+          3. Có thể điều chỉnh tốc độ phù hợp.
+        E244: >
+          ⚠️ E244 – Tần suất hoạt động quá cao.
+
+
+          🔧 Hướng xử lý:
+
+          1. Giảm tốc độ máy.
+
+          2. Giảm độ phân giải hình ảnh.
+
+          3. Giảm độ phân giải màu hiệu ứng nếu cần.
+
+          4. Reset lỗi.
+
+          5. Khi hết lỗi, có thể đưa tốc độ về giá trị ban đầu nếu điều kiện cho
+          phép.
+        E247: |
+          ⚠️ E247 – Thông báo lỗi phiên bản file.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra phiên bản file lệnh/cấu hình.
+          2. Kiểm tra file được sử dụng cho các chuyển động phức tạp của máy.
+          3. Tải file phiên bản phù hợp với máy.
+        E249: |
+          ⚠️ E249 – Thiếu bảng âm/dữ liệu trong waveform.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra waveform.
+          2. Waveform đang thiếu dữ liệu cần thiết.
+          3. Thay thế waveform phù hợp.
+          4. Tải lại waveform và kiểm tra.
+        E250: |
+          ⚠️ E250 – Backup Active: Lỗi truyền thông.
+
+          🔧 Hướng xử lý:
+          1. Reset Alarm.
+          2. Nếu không hết, tắt nguồn và khởi động lại theo quy trình.
+          3. Kiểm tra/thay thế bộ CU1128 theo quy trình kỹ thuật.
+          4. Kiểm tra/thay thế bộ điều khiển động cơ Secvor nếu lỗi.
+          4. Nếu vẫn lỗi, liên hệ KTV.
+        E266: >
+          ⚠️ E266 – Lỗi theo dõi phôi.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra cảm biến raster có bị quá tải không.
+
+          2. Kiểm tra phôi có quá lớn hoặc có vật lạ giữa cảm biến và bộ thu
+          không.
+
+          3. Làm sạch khu vực làm việc của cảm biến quang điện.
+
+          4. Kiểm tra lỗi chuyển động tự động và các cảnh báo làm gián đoạn hiệu
+          chỉnh.
+
+          5. Vệ sinh bề mặt nhạy cảm bằng khí sạch và/hoặc khăn sạch có cồn theo
+          quy trình.
+        E267: |
+          ⚠️ E267 – FireTrigger phát hiện lỗi.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra cáp của FireTrigger.
+          2. Kiểm tra kết nối FireTrigger card FirePulse.
+          3. Kiểm tra tín hiệu kích hoạt lửa ở trạng thái Auto.
+          4. Reset Alarm.
+          5. Nếu vẫn lỗi, liên hệ KTV.
+        E272: >
+          ⚠️ E272 – Cảnh báo EpsiWago.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra module Epsitron Wago có giao tiếp chính xác không.
+
+          2. Kiểm tra đầu nối module Wago.
+
+          3. Nếu lỗi liên quan quá tải/ngắn mạch: kiểm tra mạch phía sau công
+          tắc và vòng lặp.
+
+          4. Kiểm tra các kênh bị lỗi.
+
+          5. Nếu vẫn lỗi, liên hệ KTV.
+        E273: |
+          ⚠️ E273 – Detection Error Fire Trigger.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra jack Trigger card FirePulse.
+          2. Kiểm tra cáp FireTrigger.
+          3. Reset Alarm.
+          4. Nếu không hết, khởi động lại máy.
+          5. Nếu vẫn lỗi, liên hệ KTV.
+        E336: |
+          ⚠️ E336 – Lỗi chồng gạch, lỗi động cơ băng tải.
+
+          🔧 Hướng xử lý:
+          1. Nâng đầu in, thoát gạch theo đúng quy trình.
+          2. Hoắc nâng đầu in, Bật công tắc Chạy Bypass cho gạch chạy ra hết.
+          3. Reset Alarm.
+          4. Nếu hết lỗi, chạy máy bình thường.
+          5. Nếu vẫn lỗi liên hệ KTV
+        E404: |
+          ⚠️ E404 – Không khởi động được hệ thống PLC.
+
+          🔧 Hướng xử lý:
+          1. Tắt nguồn và khởi động lại.
+          2. Kiểm tra PLC và các module liên quan.
+          3. Nếu không hết, liên hệ KTV.
+        E439: |
+          ⚠️ E439 – Ethernet Communication Fail.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra kết nối Ethernet.
+          2. Kiểm tra dây mạng và đầu nối.
+          3. Tắt nguồn và khởi động lại theo quy trình.
+          4. Nếu không hết, liên hệ KTV.
+        E441: |
+          ⚠️ E441 – Machine General Activation.
+
+          🔧 Hướng xử lý:
+          1. Nhấn nút START.
+          2. Nếu không được, tắt máy và khởi động lại.
+          3. Nếu vẫn không được, liên hệ KTV.
+        E442: |
+          ⚠️ E442 – Chưa nhấn nút START máy in.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra đèn nút START.
+          2. Nhấn nút START.
+          3. Kiểm tra đèn xanh báo OK.
+          4. Nếu không được, liên hệ KTV.
+        F4034: |
+          ⚠️ F4034 – Mắc gạch Barrier.
+
+          🔧 Hướng xử lý:
+          1. Bấm Xử lý mắc gạch.
+          2. Kiểm tra cảm biến độ dày Barrier IG.
+          3. Vệ sinh cảm biến nếu bẩn.
+          4. Không làm tắt quá trình thoát gạch bị mắc.
+          5. Nếu vẫn lỗi, liên hệ KTV.
+        W01: |
+          ⚠️ W01 – Gạch vào quá dày.
+
+          🔧 Hướng xử lý:
+          Khoảng cách giữa 2 viên gạch trên 3 cm.
+        W11: |
+          ⚠️ W11 – Đầu ra dây chuyền dừng.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra tín hiệu đầu ra dây chuyền.
+          2. Kiểm tra phía dây chuyền.
+          3. Kiểm tra phía máy in.
+          4. Liên hệ KTV nếu cần.
+        W17: |
+          ⚠️ W17 – Cảnh báo thay lọc/hết mực Bar X.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra bình mực dưới và bổ sung mực.
+          2. Kiểm tra thời gian thay lọc.
+          3. KTV thay lọc khi bảo dưỡng.
+        W33: |
+          ⚠️ W33 – Lỗi hệ thống bơm/áp suất ( mất áp hệ thống bơm in head)
+
+          🔧 Hướng xử lý:
+          1. Vào MPC kiểm thông số inhead trên hệ thống màn hình.
+          2. Thay thế bơm Gotec
+          3. THay thế bơm Iwaki ( trong bar màu nếu có)
+          4. Nếu thay thế 2 bơm trên mà không hết lỗi. Kiêm tra hở
+          ở tất cả các đầu in / kênh màu. Thay thế những đầu in hở
+          gây mất áp. 
+          5. Nếu vẫn không được, liên hệ KTV.
+          
+        W39: |
+          ⚠️ W39 – Inverter Fault: Biến tần máy hút báo lỗi.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra động cơ máy hút ( có thể do kẹt cánh, hỏng bi, cháy motor)
+          2. Kiểm tra biến tần ( có thể hỏng biến tần cần thay thế)
+          3. Kiểm tra dây và nguồn cấp.
+          4. Thay thế theo quy trình kỹ thuật nếu cần.
+          
+        W40: |
+          ⚠️ W40 – Sapphire Board Error.
+
+          🔧 Hướng xử lý:
+          Reset Alarm.
+        W44: |
+          ⚠️ W44 – Quá nhiệt gạch.
+
+          🔧 Hướng xử lý:
+          Reset Alarm.
+        W45: |
+          ⚠️ W45 – Chưa hạ đầu in.
+
+          🔧 Hướng xử lý:
+          Nhấn hạ đầu in xuống vị trí in.
+        W61: |
+          ⚠️ W61 – Quá nhiệt gạch.
+
+          🔧 Hướng xử lý:
+          Reset Alarm.
+        W72: |
+          ⚠️ W72 – Thiếu đầu vào gạch.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra cảm biến phát hiện gạch đầu vào.
+          2. Kiểm tra tín hiệu cảm biến.
+          3. Kiểm tra gạch có đi vào đúng vị trí không.
+        W73: |
+          ⚠️ W73 – Thiếu mã hóa gạch.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra tín hiệu mã hóa gạch.
+          2. Kiểm tra cảm biến/encoder liên quan.
+          3. Kiểm tra kết nối bộ mã hóa.
+        W74: |
+          ⚠️ W74 – Mã hóa nhận được từ bộ đồng bộ hóa không hợp lệ.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra bộ đồng bộ hóa.
+          2. Kiểm tra tín hiệu encoder.
+          3. Kiểm tra cấu hình đồng bộ.
+        W75: |
+          ⚠️ W75 – Ethernet quá chậm.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra tốc độ và tình trạng mạng Ethernet.
+          2. Kiểm tra dây LAN và switch.
+          3. Kiểm tra tải mạng.
+          4. Nếu vẫn lỗi, liên hệ KTV.
+        W77: >
+          ⚠️ W77 – Cảnh báo quá giờ vệ sinh tự động
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra toàn bộ thời gian các kênh màu
+          2. Thời gian cài đặt giữ các kênh màu phải khớp.
+          3. Kiểm tra trường hợp thể tích giọt bằng 1s.
+          4. Thời gian cài đặt nếu máy máy dừng sản xuất 2h/lần
+          5. Thời gian cài đặt sản xuất khoảng 3h/lần vệ sinh tùy điều kiện sản xuất.
+          
+        W78: >
+          ⚠️ W78 – Nhiệt độ FirePulse quá cao.
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra quạt làm mát FirePulse.
+
+          2. Với phần cứng phiên bản 1, kiểm tra quạt có hoạt động liên tục
+          không.
+
+          3. Với phần cứng phiên bản 2, kiểm tra quạt có chạy khi cần không.
+
+          4. Kiểm tra nhiệt độ FirePulse.
+
+          5. Điều chỉnh bộ điều chỉnh xung về nhiệt độ thấp hơn nếu phù hợp.
+        W79: |
+          ⚠️ W79 – Bộ đồng bộ hóa không tìm thấy khuôn mặt được kích hoạt.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra cảm biến đồng bộ.
+          2. Kiểm tra tín hiệu phát hiện gạch.
+          3. Kiểm tra cấu hình bộ đồng bộ hóa.
+        W80: |
+          ⚠️ W80 – Phiên bản phần cứng DSP khác nhau.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra phiên bản phần cứng DSP.
+          2. Kiểm tra các DSP có cùng cấu hình/phiên bản yêu cầu không.
+          3. Nếu sai phiên bản, liên hệ KTV.
+        W82: |
+          ⚠️ W82 – Không có xung Tickle trong waveform, không thể bật Tickle.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra waveform.
+          2. Tải lại waveform có xung Tickle phù hợp.
+          3. Kiểm tra cấu hình Tickle.
+        W83: |
+          ⚠️ W83 – Cảnh báo HeadFiring trong thời gian chạy.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra trạng thái HeadFiring.
+          2. Kiểm tra tất cả hộp mực có đang tắt không.
+          3. Kiểm tra có đủ không gian cần thiết để chạy HeadFiring không.
+          4. Kiểm tra khí nén nếu có cảnh báo liên quan.
+        W84: |
+          ⚠️ W84 – Có vấn đề trong quá trình kiểm tra tính nhất quán.
+
+          🔧 Hướng xử lý:
+          1. Chỉ báo động khi bật nhớt kế.
+          2. Kiểm tra trạng thái nhớt kế.
+          3. Kiểm tra cảm biến và hệ thống đo độ nhớt.
+        W85: |
+          ⚠️ W85 – Độ nhớt mực quá thấp.
+
+          🔧 Hướng xử lý:
+          1. Chỉ báo động khi bật nhớt kế.
+          2. Kiểm tra giá trị độ nhớt.
+          3. Kiểm tra hệ thống đo và điều chỉnh độ nhớt.
+        W86: |
+          ⚠️ W86 – Độ nhớt mực quá thấp.
+
+          🔧 Hướng xử lý:
+          1. Chỉ báo động khi bật nhớt kế.
+          2. Kiểm tra giá trị độ nhớt.
+          3. Kiểm tra hệ thống đo và điều chỉnh độ nhớt.
+        W87: |
+          ⚠️ W87 – RAM dùng để xem trước đã đầy.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra bộ nhớ RAM.
+          2. Giải phóng bộ nhớ nếu có thể.
+          3. Liên hệ System/KTV nếu vẫn lỗi.
+        W88: >
+          ⚠️ W88 – Dao động áp suất tấm lưỡi liềm vượt ngưỡng khi bơm chân không
+          điều chỉnh bằng PID.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra độ rung/dao động áp suất.
+
+          2. Kiểm tra động lực học mạch thủy lực.
+
+          3. Thử làm trống/xả phù hợp để khôi phục áp suất âm.
+
+          4. Nếu vẫn lỗi, liên hệ KTV.
+        W89: >
+          ⚠️ W89 – Áp suất tấm lưỡi liềm dưới ngưỡng tối thiểu khi bơm chân
+          không điều chỉnh công suất cố định.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra áp suất tối thiểu yêu cầu.
+
+          2. Kiểm tra động lực học mạch thủy lực.
+
+          3. Thử làm trống/xả phù hợp để khôi phục áp suất âm.
+
+          4. Nếu vẫn lỗi, liên hệ KTV.
+        W90: |
+          ⚠️ W90 – Máy chủ FTP trên DSP không hoàn thành thao tác yêu cầu.
+
+          🔧 Hướng xử lý:
+          1. Nếu thao tác là chuyển file, kiểm tra file có tồn tại không.
+          2. Xem chi tiết cảnh báo để xác định nguyên nhân.
+          3. Kiểm tra kết nối DSP và FTP.
+        W95: |
+          ⚠️ W95 – Báo nhiệt thanh màu.
+
+          🔧 Hướng xử lý:
+          1. Colour Bar → Bar X → Temperature → Zone.
+          2. Nếu có đầu báo đỏ, điều chỉnh ±1°C.
+          3. Theo dõi lại nhiệt độ sau khi điều chỉnh.
+        W96: |
+          ⚠️ W96 – Sản xuất đã kết thúc.
+
+          🔧 Hướng xử lý:
+          1. Máy đã hoàn thành quá trình sản xuất.
+          2. Máy chuyển về chế độ thủ công.
+          3. Chuyển lại Auto nếu muốn tiếp tục sản xuất.
+          4. Khởi động lại sản xuất theo quy trình.
+        W97: >
+          ⚠️ W97 – Điều chỉnh nhiệt độ Sapphire / báo nhiệt thanh màu.
+
+
+          🔧 Hướng xử lý:
+
+          1. Xem chi tiết cảnh báo hiển thị trên giao diện.
+
+          2. Nếu liên quan nhiệt thanh màu: Colour Bar → Bar X → Temperature →
+          Zone.
+
+          3. Nếu có đầu báo đỏ, điều chỉnh ±1°C.
+
+          4. Theo dõi lại nhiệt độ sau khi điều chỉnh.
+        W101: |
+          ⚠️ W101 – Lỗi kẹt máng vệ sinh băng tải.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra mất nước.
+          2. Kiểm tra kẹt van.
+          3. Kiểm tra kẹt pittong.
+          4. Kiểm tra cảm biến máng vệ sinh có sáng không.
+          5. Nếu vẫn lỗi, liên hệ KTV.
+        W102: |
+          ⚠️ W102 – Không phải tất cả các kết nối được kích hoạt.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra trạng thái các kết nối.
+          2. Cho phép/kích hoạt tất cả các kết nối cần thiết.
+          3. Kiểm tra lại trạng thái máy.
+        W103: |
+          ⚠️ W103 – Gửi yêu cầu ủy quyền mới cho System.
+
+          🔧 Hướng xử lý:
+          Liên hệ System để xử lý yêu cầu ủy quyền.
+        W104: >
+          ⚠️ W104 – Cấu hình cảm biến vắt không chính xác.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra cảm biến phát hiện vị trí lưỡi gạt.
+
+          2. Kiểm tra trạng thái cảm biến khi lưỡi gạt mở/đóng.
+
+          3. Kiểm tra trạng thái cảm biến có phù hợp với đầu ra điều khiển
+          không.
+
+          4. Điều chỉnh lại cảm biến nếu cần.
+        W105: |
+          ⚠️ W105 – Số lượng tham số tỷ lệ in nhỏ hơn 1.
+
+          🔧 Hướng xử lý:
+          Tăng lượng mực đặt lên giá trị phù hợp.
+        W106: |
+          ⚠️ W106 – Lượng phủ hình ảnh quá lớn so với lượng mực yêu cầu.
+
+          🔧 Hướng xử lý:
+          1. Giảm tải lượng phủ.
+          2. Thay đổi hình ảnh nếu cần.
+          3. Có thể điều chỉnh tốc độ phù hợp.
+        W107: |
+          ⚠️ W107 – Thiếu dữ liệu năng suất.
+
+          🔧 Hướng xử lý:
+          1. Kiểm tra waveform.
+          2. Thay đổi waveform phù hợp.
+          3. Kiểm tra lại dữ liệu năng suất.
+        W108: >
+          ⚠️ W108 – Có quá nhiều sự chồng lấp trong in ngẫu nhiên.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra chế độ in "ngẫu nhiên".
+
+          2. Kiểm tra tỷ lệ phần trăm chồng lấp tối đa cho phép.
+
+          3. Điều chỉnh kích thước hình ảnh/phôi nếu cần.
+
+          4. Có thể sử dụng chế độ công việc mới với chế độ in "ngẫu nhiên" để
+          giảm khả năng các phần quá giống nhau.
+        W120: >
+          ⚠️ W120 – Cảnh báo Epsitron/Wpsitron Wago.
+
+
+          🔧 Hướng xử lý:
+
+          1. Kiểm tra trạng thái module Wago.
+
+          2. Kiểm tra kết nối module.
+
+          3. Chờ thời gian điều chỉnh đặt trước.
+
+          4. Nếu cảnh báo vẫn tồn tại sau thời gian chờ, kiểm tra module và các
+          kênh liên quan.
+
+          5. Nếu vẫn lỗi, liên hệ KTV.
+  - variables:
+      error_message: >
+        {% set ns = namespace(result='') %} {% for code, text in
+        error_db.items() %}
+          {% if not ns.result and msg is search('(^|[^A-Z0-9])' ~ code ~ '([^A-Z0-9]|$)') %}
+            {% set ns.result = text %}
+          {% endif %}
+        {% endfor %} {{ ns.result | trim }}
+  - variables:
+      instruction_message: >
+        {% if 'BỎ IN' in msg or 'KHÔNG IN' in msg %}
+
+        ⚠️ Bỏ in – Cảm Biến Keyence LR-ZB100
+
+
+        🔧 Hướng xử lý:
+
+        1. Kiểm tra lại cảm biến in IG LR-ZB100.
+           Nhấn nút Up-Down để tăng giảm mắt in xem có được không.
+           Lưu ý: Đưa gạch vào vị trí in (chỉnh UP - DOWN), cảm biến báo đèn vàng là OK.
+        2. Khôi phục cài đặt gốc:
+           - Giữ nút Down và nhấn nút Up 5 lần.
+           - → rSt → nhấn Up → no → nhấn Up → yes → nhấn Up.
+           - Hạ đầu in xuống vị trí in.
+           - Đưa gạch vào mắt in.
+           - Chỉnh Up hoặc Down.
+           - Cảm biến báo đèn vàng là OK.
+        3. Nếu khôi phục cài đặt gốc không được, thay cảm biến mới.
+
+        4. Nếu hết lỗi, chạy máy in bình thường.
+
+        {% elif 'SÓNG MÀU' in msg or 'BĂM MÀU' in msg or 'Ô BÀN CỜ' in msg %}
+
+        ⚠️ Hệ thống chuyển động băng tải và hệ thống bơm màu máy in
+
+
+        🔧 Hướng xử lý:
+
+        1. Kiểm tra gối bi băng tải, dựa vào bản in offset Centerring.
+           - Nếu chỉ bị 1 kênh màu: kiểm tra lại hệ thống bơm Inhead và vaccum.
+           - Nếu bị tất cả các kênh màu: kiểm tra lại chuyển động băng tải.
+        2. Tháo kiểm tra gối bi trục chủ động, trục bị động (nếu bị đảo thì thay
+        thế).
+
+        3. Tháo dùng thước kẹp kiểm tra đường kính trục chủ động, trục bị động
+        (nếu mòn thì thay thế).
+
+        4. Sau khi thay gối bi và trục lô mà vẫn bị, kiểm tra lại băng tải.
+
+        5. Hiệu chỉnh và theo dõi băng tải. Liên hệ KTV nếu không hết.
+
+        {% elif 'RESET MÀN HÌNH' in msg or 'KHỞI ĐỘNG LẠI MÀN HÌNH' in msg or
+        'MÀN HÌNH' in msg or 'SỬA LỖI E120' in msg %}
+
+        ⚠️ Khởi động lại Màn hình máy in System
+
+        🔧 Hướng xử lý:
+          
+        1. Cách 1: Cài lại thời gian màn hình. Chọn thời gian => Chỉnh thông số
+        bất kỳ
+          giờ hoặc phút của màn hình => chọn Apply => Ok ( màn hình sẽ tự khởi động lại 2')
+        2. Cách 2: Rút jack nguồn 24V cấp cho màn hình ra rồi cắm lại.
+          Lưu ý: Với loại màn hình Vuông đời cũ không cần rút jack, Có công tắc cấp nguồn
+          dưới đít, tắt công tắc đi và bật lại là được.
+        3. Cách 3: Tắt nguồn cấp tổng máy in, khởi động lại toàn bộ
+        máy.           
+                    
+          
+          
+        {% elif 'KHÔI PHỤC CÀI ĐẶT GỐC BARRIER' in msg or 'CALIB BARRIER' in msg
+        or 'THAY BARRIER' in msg or 'SỬA LỖI E120' in msg %}
+
+        ⚠️ Bộ Giải Mã – KEYENCE LV-N11M
+
+        🔧 Hướng xử lý:
+        1. Kiểm tra căn chỉnh sensor thu phát sao cho 2 cảm biến song song và
+        nhìn đối diện nhau.( chỉnh sao cho giá trị đỏ lớn nhất)
+        2. Giữ đồng thời 2 nút SET + PRESET → nhấn mũi tên sang ngang → rSt →
+        Mode → nhấn mũi tên sang ngang → init → Mode → OK.
+        3. Nếu căn chỉnh và khôi phục không được, thay thiết bị mới. Liên hệ
+        KTV.
+
+        {% elif 'HƯỚNG DẪN THAY DSP' in msg or 'THAY CARD DSP' in msg or 'THAY
+        DSP' in msg %}
+
+        ⚠️ Hướng dẫn thay DSP.
+
+
+        🔧 Hướng xử lý:
+
+        1. Tắt nguồn máy in.
+
+        2. Kiểm tra vị trí card (lấy lục giác 4 tháo 2 vít đế).
+
+        3. Lắp card mới. Chỉnh địa chỉ card mới giống card cũ.
+
+
+        Địa chỉ máy SYSTEM E:
+
+        * BAR 1: DSP - SW256: 0 - SW16: 1 - SW1: 0
+
+        * BAR 2: DSP - SW256: 0 - SW16: 1 - SW1: 1
+
+        * BAR 3: DSP - SW256: 0 - SW16: 1 - SW1: 2
+
+        * BAR 4: DSP - SW256: 0 - SW16: 1 - SW1: 3
+
+        * BAR 5: DSP - SW256: 0 - SW16: 1 - SW1: 4
+
+        * BAR 6: DSP - SW256: 0 - SW16: 1 - SW1: 5
+
+        * BAR 7: DSP - SW256: 0 - SW16: 1 - SW1: 6
+
+        * BAR 8: DSP - SW256: 0 - SW16: 1 - SW1: 7
+
+
+        4. Cấp nguồn máy in, chạy thử xem có vấn đề gì không.
+
+        5. Nếu thay card không được, liên hệ KTV.
+
+        {% elif 'THAY CARD' in msg or 'THAY FP' in msg or 'THAY CARD FIRE PULSE'
+        in msg %}
+
+        ⚠️ Hướng dẫn thay Card FP.
+
+
+        🔧 Hướng xử lý:
+
+        1. Tắt nguồn máy in.
+
+        2. Kiểm tra vị trí card (lấy lục giác 4 tháo 2 vít đế).
+
+        3. Lắp card mới. Chỉnh địa chỉ card mới giống card cũ.
+
+
+        Địa chỉ máy SYSTEM E:
+
+        * BAR 1: FP1 - SW1: E - SW2: 1 | FP2 - SW1: F - SW2: 1
+
+        * BAR 2: FP1 - SW1: 2 - SW2: 2 | FP2 - SW1: 3 - SW2: 2
+
+        * BAR 3: FP1 - SW1: 6 - SW2: 2 | FP2 - SW1: 7 - SW2: 2
+
+        * BAR 4: FP1 - SW1: A - SW2: 2 | FP2 - SW1: B - SW2: 2
+
+        * BAR 5: FP1 - SW1: E - SW2: 2 | FP2 - SW1: F - SW2: 2
+
+        * BAR 6: FP1 - SW1: 2 - SW2: 3 | FP2 - SW1: 3 - SW2: 3
+
+        * BAR 7: FP1 - SW1: 6 - SW2: 3 | FP2 - SW1: 7 - SW2: 3
+
+        * BAR 8: FP1 - SW1: A - SW2: 3 | FP2 - SW1: B - SW2: 3
+
+
+        4. Cấp nguồn máy in, chạy thử xem có vấn đề gì không.
+
+        5. Nếu thay card không được, liên hệ KTV.
+
+
+        {% elif 'THAY BIẾN TẦN' in msg or 'CÀI ĐẶT BIẾN TẦN' in msg or 'CÀI BIẾN
+        TẦN' in msg %}
+
+        ⚠️ Hướng dẫn cài đặt biến tần Yakawa V1000.
+          Nhấn mũi tên =>> Xuống =>> Xuống =>> Par ( Parameter) =>> Chọn Enter
+          Trang 1: A1-01 => Enter => Enter 
+          A1 nhấp nháy. Nếu chọn mũi tên lên hoặc xuống sẽ chuyển sang B1, C1...vv=> Enter là chọn
+          Nếu 01 nhấp nháy bấm mũi lên lên hoặc xuống để thay đổi giá trị). rồi => Enter 
+          ( để vào cài đặt giá trị) =>> Chọn giá trị = X => Enter cài đặt thành công.
+          Nhấn ESC để thoát ra ngoài.
+
+        🔧 Hướng dẫn cài đặt:
+
+        1. A1-03 = 2220
+
+        2. B1-01 = 0
+
+        3. B1-04 = 1
+
+        4. C1-01 = 2
+
+        5. C1-02 = 5
+
+        6. D1-01 = 40
+
+        7. D1-02 = 60
+
+        8. E1-04 = 60
+
+        9. E2-01 = 9
+
+        10. E2-04 = 2
+
+        11. O2-09 = 2
+
+        12. L6-01 = 3
+
+        13. L6-02 = 110
+
+        14. L6-03 = 1
+
+        {% endif %}
+  - variables:
+      reply: >
+        {% if error_message | trim != '' %}{{ error_message | trim }} {% else
+        %}{{ instruction_message | trim }}{% endif %}
+  - action: rest_command.print_learn_lookup
+    data:
+      code: '{{ request_code }}'
+      group_id: '{{ reply_thread_id }}'
+    response_variable: learn_lookup
+    continue_on_error: true
+  - variables:
+      learned_message: >-
+        {% if learn_lookup is defined and learn_lookup.status == 200 and
+        learn_lookup.content is mapping %}{{ learn_lookup.content.text |
+        default('', true) | trim }}{% endif %}
+  - if:
+      - condition: template
+        value_template: '{{ wants_history and not is_log_query and not is_log_edit }}'
+    then:
+      - action: rest_command.print_log_query
+        data:
+          q: ''
+          group_id: '{{ reply_thread_id }}'
+        response_variable: log_ctx
+        continue_on_error: true
+      - variables:
+          ai_ctx: >-
+            {% if log_ctx is defined and log_ctx.status == 200 and
+            log_ctx.content is mapping and log_ctx.content['items'] %}
+
+
+            [DỮ LIỆU THẬT từ sổ NHẬT KÝ SỬA CHỮA / THAY THẾ THIẾT BỊ trên
+            server (mới nhất trước; "dây chuyền 4" chính là DC4): {% for it in
+            log_ctx.content['items'] %}
+            - {{ it.date }}: {{ it.device }}{% if it.position %} | {{
+            it.position }}{% endif %}{% if it.machine %} | {{ it.machine }}{%
+            endif %}{% if it.note %} | {{ it.note }}{% endif %}{% endfor %} Hãy
+            trả lời câu hỏi phía trên CHỈ dựa vào dữ liệu này; hạng mục nào
+            không có trong dữ liệu thì nói rõ "chưa có ghi nhận", tuyệt đối
+            không bịa thêm.] {% endif %}
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: '{{ is_image }}'
+        sequence:
+          - variables:
+              ai_cands: >-
+                {% set live = states.ai_task |
+                rejectattr('state', 'eq', 'unavailable') |
+                map(attribute='entity_id') | list %}{% set pref =
+                ['ai_task.google_ai_task'] if 'ai_task.google_ai_task' in
+                live else [] %}{{ (pref + live) | unique | list }}
+              ai_dump: >-
+                {% for e in states.ai_task %}{{ e.entity_id }}={{
+                e.state }}; {% endfor %}
+              img_text: ''
+          - variables:
+              cand0: "{{ ai_cands[0] if ai_cands | length > 0 else '' }}"
+              cand1: "{{ ai_cands[1] if ai_cands | length > 1 else '' }}"
+              cand2: "{{ ai_cands[2] if ai_cands | length > 2 else '' }}"
+          - if:
+              - condition: template
+                value_template: "{{ cand0 != '' }}"
+            then:
+              - action: downloader.download_file
+                data:
+                  url: '{{ image_url }}'
+                  subdir: zalo_images
+                  filename: image_latest.jpg
+                  overwrite: true
+                continue_on_error: true
+              - delay: '00:00:03'
+              - if:
+                - condition: template
+                  value_template: "{{ cand0 != '' }}"
+                then:
+                  - action: ai_task.generate_data
+                    data:
+                      task_name: Phân tích ảnh Zalo
+                      entity_id: '{{ cand0 }}'
+                      instructions: >-
+                        Dạ, hãy phân tích ảnh đính kèm và trả lời bằng tiếng Việt
+                        có ĐẦY ĐỦ DẤU, giọng nhẹ nhàng, ngọt ngào, xưng em, chỉ
+                        gọi người xem là anh (không dùng anh). Qui tắc bắt
+                        buộc: - Chỉ mô tả những gì nhìn thấy thật rõ trong ảnh,
+                        trả lời đúng điều được hỏi. - Tuyệt đối KHÔNG nhắc đến
+                        những thứ không xuất hiện trong ảnh (không viết kiểu
+                        "không có người", "không có động vật", "không có xe"). -
+                        Không suy đoán: chi tiết nào không chắc chắn thì bỏ qua
+                        hẳn, không nêu ra. - Nếu ảnh là màn hình máy hoặc thiết
+                        bị, đọc rõ chữ, số, mã lỗi nhìn thấy được. - Không dùng
+                        ký tự đặc biệt *, emoji. - Ngắn gọn, không dòng trống.
+                        - Riêng với ảnh bài tập toán: CHỈ chép lại phép tính
+                        đúng y như trong ảnh, tuyệt đối không tự tính kết quả,
+                        không chấm Đúng Sai, không chào hỏi, không giải thích.
+                        Mỗi dòng chỉ gồm: số thứ nhất, dấu phép tính, số thứ
+                        hai, dấu =, đáp án học sinh đã viết trong ảnh. Dùng
+                        dấu × cho phép nhân, dấu : cho phép chia. Không thêm
+                        bất kỳ chữ nào khác ngoài các dòng phép tính đã chép.
+                      attachments:
+                        - media_content_id: >-
+                            media-source://media_source/zalo/image_latest.jpg
+                          media_content_type: image/jpeg
+                      structure:
+                        analysis:
+                          description: >-
+                            Kết quả phân tích ảnh, tiếng Việt có đầy đủ dấu,
+                            giọng nhẹ nhàng ngọt ngào, xưng em. Chỉ gồm những
+                            gì thực sự xuất hiện và nhìn thấy rõ trong ảnh:
+                            người, động vật, phương tiện nếu có mặt thì mô tả
+                            chi tiết số lượng, trang phục, hành động; chữ, số
+                            và mã lỗi đọc được trên màn hình hoặc thiết bị.
+                            Tuyệt đối không nhắc đến những thứ không xuất
+                            hiện trong ảnh, không suy đoán, không nêu chi
+                            tiết không chắc chắn.
+                            Riêng ảnh bài tập toán: kết quả CHỈ gồm các phép tính
+                            chép y nguyên từ ảnh, mỗi phép tính một dòng gồm hai
+                            số, dấu phép tính, dấu = và đáp án học sinh đã viết.
+                            Không tự tính kết quả, không ghi Đúng hay Sai.
+                          required: true
+                          selector:
+                            text:
+                              multiline: true
+                    response_variable: img_result
+                    continue_on_error: true
+                  - variables:
+                      img_text: >-
+                        {{ ((img_result | default({}, true)).get('data', {}) or
+                        {}).get('analysis', '') | string | trim }}
+              - if:
+                - condition: template
+                  value_template: "{{ img_text == '' }}"
+                - condition: template
+                  value_template: "{{ cand1 != '' }}"
+                then:
+                  - action: ai_task.generate_data
+                    data:
+                      task_name: Phân tích ảnh Zalo
+                      entity_id: '{{ cand1 }}'
+                      instructions: >-
+                        Dạ, hãy phân tích ảnh đính kèm và trả lời bằng tiếng Việt
+                        có ĐẦY ĐỦ DẤU, giọng nhẹ nhàng, ngọt ngào, xưng em, chỉ
+                        gọi người xem là anh (không dùng anh). Qui tắc bắt
+                        buộc: - Chỉ mô tả những gì nhìn thấy thật rõ trong ảnh,
+                        trả lời đúng điều được hỏi. - Tuyệt đối KHÔNG nhắc đến
+                        những thứ không xuất hiện trong ảnh (không viết kiểu
+                        "không có người", "không có động vật", "không có xe"). -
+                        Không suy đoán: chi tiết nào không chắc chắn thì bỏ qua
+                        hẳn, không nêu ra. - Nếu ảnh là màn hình máy hoặc thiết
+                        bị, đọc rõ chữ, số, mã lỗi nhìn thấy được. - Không dùng
+                        ký tự đặc biệt *, emoji. - Ngắn gọn, không dòng trống.
+                        - Riêng với ảnh bài tập toán: CHỈ chép lại phép tính
+                        đúng y như trong ảnh, tuyệt đối không tự tính kết quả,
+                        không chấm Đúng Sai, không chào hỏi, không giải thích.
+                        Mỗi dòng chỉ gồm: số thứ nhất, dấu phép tính, số thứ
+                        hai, dấu =, đáp án học sinh đã viết trong ảnh. Dùng
+                        dấu × cho phép nhân, dấu : cho phép chia. Không thêm
+                        bất kỳ chữ nào khác ngoài các dòng phép tính đã chép.
+                      attachments:
+                        - media_content_id: >-
+                            media-source://media_source/zalo/image_latest.jpg
+                          media_content_type: image/jpeg
+                      structure:
+                        analysis:
+                          description: >-
+                            Kết quả phân tích ảnh, tiếng Việt có đầy đủ dấu,
+                            giọng nhẹ nhàng ngọt ngào, xưng em. Chỉ gồm những
+                            gì thực sự xuất hiện và nhìn thấy rõ trong ảnh:
+                            người, động vật, phương tiện nếu có mặt thì mô tả
+                            chi tiết số lượng, trang phục, hành động; chữ, số
+                            và mã lỗi đọc được trên màn hình hoặc thiết bị.
+                            Tuyệt đối không nhắc đến những thứ không xuất
+                            hiện trong ảnh, không suy đoán, không nêu chi
+                            tiết không chắc chắn.
+                            Riêng ảnh bài tập toán: kết quả CHỈ gồm các phép tính
+                            chép y nguyên từ ảnh, mỗi phép tính một dòng gồm hai
+                            số, dấu phép tính, dấu = và đáp án học sinh đã viết.
+                            Không tự tính kết quả, không ghi Đúng hay Sai.
+                          required: true
+                          selector:
+                            text:
+                              multiline: true
+                    response_variable: img_result
+                    continue_on_error: true
+                  - variables:
+                      img_text: >-
+                        {{ ((img_result | default({}, true)).get('data', {}) or
+                        {}).get('analysis', '') | string | trim }}
+              - if:
+                - condition: template
+                  value_template: "{{ img_text == '' }}"
+                - condition: template
+                  value_template: "{{ cand2 != '' }}"
+                then:
+                  - action: ai_task.generate_data
+                    data:
+                      task_name: Phân tích ảnh Zalo
+                      entity_id: '{{ cand2 }}'
+                      instructions: >-
+                        Dạ, hãy phân tích ảnh đính kèm và trả lời bằng tiếng Việt
+                        có ĐẦY ĐỦ DẤU, giọng nhẹ nhàng, ngọt ngào, xưng em, chỉ
+                        gọi người xem là anh (không dùng anh). Qui tắc bắt
+                        buộc: - Chỉ mô tả những gì nhìn thấy thật rõ trong ảnh,
+                        trả lời đúng điều được hỏi. - Tuyệt đối KHÔNG nhắc đến
+                        những thứ không xuất hiện trong ảnh (không viết kiểu
+                        "không có người", "không có động vật", "không có xe"). -
+                        Không suy đoán: chi tiết nào không chắc chắn thì bỏ qua
+                        hẳn, không nêu ra. - Nếu ảnh là màn hình máy hoặc thiết
+                        bị, đọc rõ chữ, số, mã lỗi nhìn thấy được. - Không dùng
+                        ký tự đặc biệt *, emoji. - Ngắn gọn, không dòng trống.
+                        - Riêng với ảnh bài tập toán: CHỈ chép lại phép tính
+                        đúng y như trong ảnh, tuyệt đối không tự tính kết quả,
+                        không chấm Đúng Sai, không chào hỏi, không giải thích.
+                        Mỗi dòng chỉ gồm: số thứ nhất, dấu phép tính, số thứ
+                        hai, dấu =, đáp án học sinh đã viết trong ảnh. Dùng
+                        dấu × cho phép nhân, dấu : cho phép chia. Không thêm
+                        bất kỳ chữ nào khác ngoài các dòng phép tính đã chép.
+                      attachments:
+                        - media_content_id: >-
+                            media-source://media_source/zalo/image_latest.jpg
+                          media_content_type: image/jpeg
+                      structure:
+                        analysis:
+                          description: >-
+                            Kết quả phân tích ảnh, tiếng Việt có đầy đủ dấu,
+                            giọng nhẹ nhàng ngọt ngào, xưng em. Chỉ gồm những
+                            gì thực sự xuất hiện và nhìn thấy rõ trong ảnh:
+                            người, động vật, phương tiện nếu có mặt thì mô tả
+                            chi tiết số lượng, trang phục, hành động; chữ, số
+                            và mã lỗi đọc được trên màn hình hoặc thiết bị.
+                            Tuyệt đối không nhắc đến những thứ không xuất
+                            hiện trong ảnh, không suy đoán, không nêu chi
+                            tiết không chắc chắn.
+                            Riêng ảnh bài tập toán: kết quả CHỈ gồm các phép tính
+                            chép y nguyên từ ảnh, mỗi phép tính một dòng gồm hai
+                            số, dấu phép tính, dấu = và đáp án học sinh đã viết.
+                            Không tự tính kết quả, không ghi Đúng hay Sai.
+                          required: true
+                          selector:
+                            text:
+                              multiline: true
+                    response_variable: img_result
+                    continue_on_error: true
+                  - variables:
+                      img_text: >-
+                        {{ ((img_result | default({}, true)).get('data', {}) or
+                        {}).get('analysis', '') | string | trim }}
+            else:
+              - action: persistent_notification.create
+                data:
+                  title: Learn Data Bot - HA chưa có AI Task entity
+                  message: >-
+                    Không tìm thấy entity ai_task.* nào đang bật trên HA
+                    này nên chưa phân tích được ảnh. Vào Settings →
+                    Devices & services → Google Generative AI kiểm tra
+                    entry có entity ai_task.* và đang Enabled không.
+          - variables:
+              img_send_text: >-
+                {% set rows = img_text |
+                regex_findall('([0-9]+)\\s*([+\\-×x:÷])\\s*([0-9]+)\\s*=\\s*([0-9]+)(?![0-9]|\\s*—)')
+                %} {% if rows | length >= 1 %} {% set ns = namespace(out='')
+                %} {% for a, op, b, ans in rows %} {% set ai = a | int %} {%
+                set bi = b | int %} {% set si = ans | int %} {% set opn =
+                '×' if op in ['×', 'x'] else (':' if op in [':', '÷'] else
+                op) %} {% if opn == '+' %} {% set corr = ai + bi %} {% elif
+                opn == '-' %} {% set corr = ai - bi %} {% elif opn == '×'
+                %} {% set corr = ai * bi %} {% elif bi != 0 and ai % bi ==
+                0 %} {% set corr = ai // bi %} {% else %} {% set corr =
+                -999999 %} {% endif %} {% set verdict = 'Đúng' if corr ==
+                si else 'Sai' %} {% set disp = corr if corr != -999999 else
+                si %} {% set ns.out = ns.out ~ ai ~ ' ' ~ opn ~ ' ' ~ bi ~
+                ' = ' ~ disp ~ ' — ' ~ verdict ~ ('\n' if not loop.last
+                else '') %} {% endfor %} {{ ns.out }} {% else %}
+                {% set fs = img_text |
+                regex_findall('([0-9]+\\s*[+\\-×x:÷/]\\s*[0-9]+\\s*=\\s*[0-9]+\\s*—\\s*(?:Đúng|Sai))')
+                %} {% if fs | length >= 2 %} {% set ns = namespace(out='')
+                %} {% for f in fs %} {% set ns.out = ns.out ~ f ~ ('\n' if
+                not loop.last else '') %} {% endfor %} {{ ns.out }} {% else
+                %} {{ img_text }} {% endif %}
+                {% endif %}
+          - if:
+              - condition: template
+                value_template: "{{ img_text != '' }}"
+            then:
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: '{{ img_send_text }}'
+            else:
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: >-
+                    Dạ em chưa đọc được ảnh này, anh gửi lại giúp em
+                    nhé.
+              - action: persistent_notification.create
+                data:
+                  title: Learn Data Bot - Chưa phân tích được ảnh
+                  message: >-
+                    Đã thử lần lượt các AI Task entity nhưng không entity
+                    nào trả kết quả (entity có trong States nhưng
+                    generate_data báo not found thường là entity ma của
+                    lần cài cũ / entry integration chưa nạp). Danh sách
+                    hiện tại: {{ ai_dump }}
+          - variables:
+              img_codes: >-
+                {% set cs = img_text | upper |
+                regex_findall('([A-Z]{1,3}[0-9]{1,4})') %}{{ cs | unique | list }}
+              img_code1: "{{ img_codes[0] if img_codes | length > 0 else '' }}"
+              img_code2: "{{ img_codes[1] if img_codes | length > 1 else '' }}"
+          - if:
+              - condition: template
+                value_template: "{{ img_code1 != '' }}"
+            then:
+              - action: rest_command.print_learn_lookup
+                data:
+                  code: '{{ img_code1 }}'
+                  group_id: '{{ reply_thread_id }}'
+                response_variable: img_lookup1
+                continue_on_error: true
+              - variables:
+                  img_reply1: >-
+                    {% if img_lookup1 is defined and img_lookup1.status
+                    == 200 and img_lookup1.content is mapping and
+                    img_lookup1.content.get('found') %}{{ img_lookup1.content.get('text',
+                    '') }}{% else %}{{ error_db.get(img_code1, '') }}{% endif %}
+              - if:
+                  - condition: template
+                    value_template: "{{ img_reply1 | trim != '' }}"
+                then:
+                  - action: zalo_bot.send_message
+                    data:
+                      type: '1'
+                      thread_id: '{{ reply_thread_id }}'
+                      account_selection: '+84334503457'
+                      message: '{{ img_reply1 }}'
+          - if:
+              - condition: template
+                value_template: "{{ img_code2 != '' }}"
+            then:
+              - action: rest_command.print_learn_lookup
+                data:
+                  code: '{{ img_code2 }}'
+                  group_id: '{{ reply_thread_id }}'
+                response_variable: img_lookup2
+                continue_on_error: true
+              - variables:
+                  img_reply2: >-
+                    {% if img_lookup2 is defined and img_lookup2.status
+                    == 200 and img_lookup2.content is mapping and
+                    img_lookup2.content.get('found') %}{{ img_lookup2.content.get('text',
+                    '') }}{% else %}{{ error_db.get(img_code2, '') }}{% endif %}
+              - if:
+                  - condition: template
+                    value_template: "{{ img_reply2 | trim != '' }}"
+                then:
+                  - action: zalo_bot.send_message
+                    data:
+                      type: '1'
+                      thread_id: '{{ reply_thread_id }}'
+                      account_selection: '+84334503457'
+                      message: '{{ img_reply2 }}'
+      - conditions:
+          - condition: template
+            value_template: '{{ is_log_delete }}'
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ log_del_date != '' }}"
+                sequence:
+                  - action: rest_command.print_log_delete_date
+                    data:
+                      date: '{{ log_del_date }}'
+                      group_id: '{{ reply_thread_id }}'
+                    response_variable: del_result
+                    continue_on_error: true
+                  - variables:
+                      del_confirm: >-
+                        {% if del_result is defined and del_result.status ==
+                        200 %}🗑️ Đã xóa {{ del_result.content.deleted }} dòng
+                        nhật ký ngày {{ log_del_date }}.{% else %}❌ Chưa xóa
+                        được - kiểm tra server / rest_command mới đã nạp
+                        chưa.{% endif %}
+                  - action: zalo_bot.send_message
+                    data:
+                      type: '1'
+                      thread_id: '{{ reply_thread_id }}'
+                      account_selection: '+84334503457'
+                      message: '{{ del_confirm }}'
+              - conditions:
+                  - condition: template
+                    value_template: "{{ log_del_id != '' }}"
+                sequence:
+                  - action: rest_command.print_log_delete_id
+                    data:
+                      id: '{{ log_del_id }}'
+                    response_variable: del_result
+                    continue_on_error: true
+                  - variables:
+                      del_confirm: >-
+                        {% if del_result is defined and del_result.status ==
+                        200 and del_result.content.deleted | int > 0 %}🗑️ Đã
+                        xóa dòng #{{ log_del_id }}: {{
+                        del_result.content.device }} ({{ del_result.content.date
+                        }}){% elif del_result is defined and del_result.status
+                        == 200 %}Không tìm thấy dòng nhật ký #{{ log_del_id
+                        }}.{% else %}❌ Chưa xóa được - kiểm tra server /
+                        rest_command mới đã nạp chưa.{% endif %}
+                  - action: zalo_bot.send_message
+                    data:
+                      type: '1'
+                      thread_id: '{{ reply_thread_id }}'
+                      account_selection: '+84334503457'
+                      message: '{{ del_confirm }}'
+            default:
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: >-
+                    Chưa rõ cần xóa gì. Xóa 1 dòng: @Aibot xóa nhật ký <số #>
+                    (số # xem khi tra nhật ký). Xóa cả 1 ngày: @Aibot xóa nhật
+                    ký ngày <dd/mm/yyyy>, ví dụ @Aibot xóa nhật ký ngày
+                    10/11/2026
+      - conditions:
+          - condition: template
+            value_template: '{{ is_log_edit }}'
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ edit_id != '' }}"
+            then:
+              - action: rest_command.print_log_update
+                data:
+                  id: '{{ edit_id }}'
+                  device: '{{ edit_device }}'
+                  position: '{{ edit_position }}'
+                  machine: '{{ edit_machine }}'
+                  note: '{{ edit_note }}'
+                  date: '{{ edit_date_in }}'
+                response_variable: edit_result
+                continue_on_error: true
+              - variables:
+                  edit_confirm: >-
+                    {% if edit_result is defined and edit_result.status ==
+                    200 %}✅ Dạ, đã sửa dòng nhật ký #{{ edit_id }}: {{
+                    edit_result.content.device }}{% if
+                    edit_result.content.position %} | {{
+                    edit_result.content.position }}{% endif %}{% if
+                    edit_result.content.machine %} | {{
+                    edit_result.content.machine }}{% endif %}{% if
+                    edit_result.content.note %} | {{
+                    edit_result.content.note }}{% endif %} | ngày {{
+                    edit_result.content.date }}{% elif edit_result is
+                    defined and edit_result.status == 404 %}Dạ em không
+                    tìm thấy dòng nhật ký #{{ edit_id }} ạ.{% else %}❌ Dạ
+                    em chưa sửa được, anh kiểm tra giúp em server /
+                    rest_command mới nhé.{% endif %}
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: '{{ edit_confirm }}'
+            else:
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: >-
+                    Dạ, sửa nhật ký gõ dạng: @Aibot sửa nhật ký <số #>:
+                    <Thiết bị> | <Vị trí> | <Máy> | <Ghi chú> | <Ngày>. Ô
+                    nào để trống thì giữ nguyên giá trị cũ. Số # xem khi
+                    tra nhật ký.
+      - conditions:
+          - condition: template
+            value_template: '{{ is_log_query }}'
+        sequence:
+          - action: rest_command.print_log_query
+            data:
+              q: '{{ log_q }}'
+              group_id: '{{ reply_thread_id }}'
+            response_variable: log_result
+            continue_on_error: true
+          - variables:
+              logs_message: >-
+                {% if log_result is defined and log_result.status == 200 and
+                log_result.content is mapping and log_result.content['items']
+                %}📒 Nhật ký khớp "{{ log_q }}" ({{
+                log_result.content.count }} dòng mới nhất): {% for it in
+                log_result.content['items'] %}
+                • #{{ it.id }} – {{ it.date }} – {{ it.device }}{% if it.position %} | {{
+                it.position }}{% endif %}{% if it.machine %} | {{ it.machine
+                }}{% endif %}{% if it.note %} | {{ it.note }}{% endif %} {%
+                endfor %}{% else %}Chưa tìm thấy nhật ký nào khớp "{{
+                log_query_text }}".{% endif %}
+          - action: zalo_bot.send_message
+            data:
+              type: '1'
+              thread_id: '{{ reply_thread_id }}'
+              account_selection: '+84334503457'
+              message: '{{ logs_message }}'
+      - conditions:
+          - condition: template
+            value_template: '{{ is_log }}'
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ log_device != '' }}"
+            then:
+              - action: rest_command.print_log_save
+                data:
+                  device: '{{ log_device }}'
+                  position: '{{ log_position }}'
+                  machine: '{{ log_machine }}'
+                  note: '{{ log_note }}'
+                  date: '{{ log_date_in }}'
+                  group_id: '{{ reply_thread_id }}'
+                response_variable: log_save
+                continue_on_error: true
+              - variables:
+                  log_confirm: >-
+                    {% if log_save is defined and log_save.status == 200 %}✅
+                    Đã ghi nhật ký ({{ log_save.content.date }}): {{
+                    log_device }}{% if log_position %} | {{ log_position }}{%
+                    endif %}{% if log_machine %} | {{ log_machine }}{% endif
+                    %}{% if log_note %} | {{ log_note }}{% endif %}{% else %}❌
+                    Chưa ghi được nhật ký - server chưa chạy hoặc HA chưa nạp
+                    rest_command mới.{% endif %}
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: '{{ log_confirm }}'
+            else:
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: >-
+                    Chưa ghi được: gõ dạng @Aibot nhật ký: <Tên thiết bị> |
+                    <Vị trí> | <Máy DC1-DC4> | <Ghi chú> | <Ngày nếu khác hôm
+                    nay>. Ví dụ: @Aibot nhật ký: DSP 2.5 | Kênh 3 | DC4 | Card
+                    tháo máy DC3
+      - conditions:
+          - condition: template
+            value_template: '{{ is_forget }}'
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ request_code != '' }}"
+            then:
+              - action: rest_command.print_learn_delete
+                data:
+                  code: '{{ request_code }}'
+                  group_id: '{{ reply_thread_id }}'
+                continue_on_error: true
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: >-
+                    Đã xóa mã đã học {{ request_code }}. Nếu mã này có trong
+                    kho gốc, bot quay về nội dung gốc.
+            else:
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: 'Chưa xóa được: thiếu mã lỗi. Gõ dạng: @Aibot xóa học E999'
+      - conditions:
+          - condition: template
+            value_template: '{{ is_rename and rename_names | length > 0 }}'
+        sequence:
+          - action: rest_command.bot_names_replace
+            data:
+              names: '{{ rename_csv }}'
+              group_id: '{{ reply_thread_id }}'
+            response_variable: name_op
+            continue_on_error: true
+          - if:
+              - condition: template
+                value_template: >-
+                  {{ name_op is defined and name_op.status == 200 }}
+            then:
+              - action: rest_command.bot_names_get
+                data:
+                  group_id: '{{ reply_thread_id }}'
+                response_variable: names_after
+                continue_on_error: true
+              - variables:
+                  names_now: >-
+                    {% if names_after is defined and names_after.status ==
+                    200 and names_after.content is mapping and
+                    names_after.content.get('names') %}{{
+                    names_after.content.get('names') }}{% else %}{{
+                    dyn_names }}{% endif %}
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: >-
+                    Dạ, xong rồi ạ. Từ nay anh gọi em là: {{
+                    names_now | join(', ') }} — gọi đúng một trong các
+                    tên này là em trả lời ngay nha.
+            else:
+              - action: persistent_notification.create
+                data:
+                  title: Learn Data Bot - Đổi tên thất bại
+                  message: >-
+                    Lệnh đổi/thêm/xóa tên bot không lưu được (add-on
+                    Learn Data Server cần cập nhật lên bản 1.4.0 để có
+                    kho tên bot). Nội dung tin: {{ user_message }}
+                  notification_id: learn_data_bot_rename_fail
+      - conditions:
+          - condition: template
+            value_template: "{{ is_add_name and add_name != '' }}"
+        sequence:
+          - action: rest_command.bot_names_add
+            data:
+              name: '{{ add_name }}'
+              group_id: '{{ reply_thread_id }}'
+            response_variable: name_op
+            continue_on_error: true
+          - if:
+              - condition: template
+                value_template: >-
+                  {{ name_op is defined and name_op.status == 200 }}
+            then:
+              - action: rest_command.bot_names_get
+                data:
+                  group_id: '{{ reply_thread_id }}'
+                response_variable: names_after
+                continue_on_error: true
+              - variables:
+                  names_now: >-
+                    {% if names_after is defined and names_after.status ==
+                    200 and names_after.content is mapping and
+                    names_after.content.get('names') %}{{
+                    names_after.content.get('names') }}{% else %}{{
+                    dyn_names }}{% endif %}
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: >-
+                    Dạ, xong rồi ạ. Từ nay anh gọi em là: {{
+                    names_now | join(', ') }} — gọi đúng một trong các
+                    tên này là em trả lời ngay nha.
+            else:
+              - action: persistent_notification.create
+                data:
+                  title: Learn Data Bot - Đổi tên thất bại
+                  message: >-
+                    Lệnh đổi/thêm/xóa tên bot không lưu được (add-on
+                    Learn Data Server cần cập nhật lên bản 1.4.0 để có
+                    kho tên bot). Nội dung tin: {{ user_message }}
+                  notification_id: learn_data_bot_rename_fail
+      - conditions:
+          - condition: template
+            value_template: "{{ is_del_name and del_name != '' }}"
+        sequence:
+          - action: rest_command.bot_names_remove
+            data:
+              name: '{{ del_name }}'
+              group_id: '{{ reply_thread_id }}'
+            response_variable: name_op
+            continue_on_error: true
+          - if:
+              - condition: template
+                value_template: >-
+                  {{ name_op is defined and name_op.status == 200 }}
+            then:
+              - action: rest_command.bot_names_get
+                data:
+                  group_id: '{{ reply_thread_id }}'
+                response_variable: names_after
+                continue_on_error: true
+              - variables:
+                  names_now: >-
+                    {% if names_after is defined and names_after.status ==
+                    200 and names_after.content is mapping and
+                    names_after.content.get('names') %}{{
+                    names_after.content.get('names') }}{% else %}{{
+                    dyn_names }}{% endif %}
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: >-
+                    Dạ, xong rồi ạ. Từ nay anh gọi em là: {{
+                    names_now | join(', ') }} — gọi đúng một trong các
+                    tên này là em trả lời ngay nha.
+            else:
+              - action: persistent_notification.create
+                data:
+                  title: Learn Data Bot - Đổi tên thất bại
+                  message: >-
+                    Lệnh đổi/thêm/xóa tên bot không lưu được (add-on
+                    Learn Data Server cần cập nhật lên bản 1.4.0 để có
+                    kho tên bot). Nội dung tin: {{ user_message }}
+                  notification_id: learn_data_bot_rename_fail
+      - conditions:
+          - condition: template
+            value_template: '{{ is_wipe_memory }}'
+        sequence:
+          - action: rest_command.memory_epoch_bump
+            data:
+              group_id: '{{ reply_thread_id }}'
+            response_variable: wipe_resp
+            continue_on_error: true
+          - if:
+              - condition: template
+                value_template: >-
+                  {{ wipe_resp is defined and wipe_resp.status == 200 }}
+            then:
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: >-
+                    Dạ, em đã xóa toàn bộ phần ghi nhớ trò chuyện của
+                    nhóm mình rồi ạ. Từ giờ mình trò chuyện lại từ đầu
+                    nha anh.
+            else:
+              - action: persistent_notification.create
+                data:
+                  title: Learn Data Bot - Xóa ghi nhớ thất bại
+                  message: >-
+                    Lệnh xóa ghi nhớ không chạy được (add-on Learn Data
+                    Server cần cập nhật lên bản 1.5.0).
+                  notification_id: learn_data_bot_wipe_fail
+      - conditions:
+          - condition: template
+            value_template: '{{ is_learn }}'
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ request_code != '' and learn_text != '' }}"
+            then:
+              - action: rest_command.print_learn_save
+                data:
+                  code: '{{ request_code }}'
+                  text: '{{ learn_stored_text }}'
+                  group_id: '{{ reply_thread_id }}'
+                response_variable: learn_save
+                continue_on_error: true
+              - variables:
+                  learn_confirm: >-
+                    {% if learn_save is defined and learn_save.status == 200
+                    %}✅ Đã cập nhật tự động mã {{ request_code }}. Từ giờ gửi
+                    {{ request_code }} bot sẽ trả nội dung mới này. Muốn gỡ:
+                    @Aibot xóa học {{ request_code }}{% else %}❌ Chưa lưu được
+                    mã {{ request_code }} - server học chưa chạy hoặc HA chưa
+                    nạp rest_command. Nội dung chưa được cập nhật.{% endif %}
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: '{{ learn_confirm }}'
+            else:
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: >-
+                    Chưa lưu được: gõ dạng @Aibot học E999: <nội dung đầy đủ
+                    của mã đó>
+      - conditions:
+          - condition: template
+            value_template: '{{ is_reminder_cancel }}'
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ rem_cancel_id > 0 }}"
+            then:
+              - action: rest_command.reminder_delete
+                data:
+                  id: '{{ rem_cancel_id }}'
+                  group_id: '{{ reply_thread_id }}'
+                response_variable: rem_del_resp
+                continue_on_error: true
+              - variables:
+                  rem_del_text: >-
+                    {% if rem_del_resp is defined and rem_del_resp.status == 200 %}Dạ, em đã hủy lịch hẹn #{{ rem_cancel_id }} rồi ạ.{% else %}Dạ, em không tìm thấy lịch hẹn #{{ rem_cancel_id }} của nhóm mình ạ. Anh nhắn "Lyly lịch hẹn" để xem danh sách nhé.{% endif %}
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: '{{ rem_del_text }}'
+            else:
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: >-
+                    Dạ, anh nhắn "Lyly hủy lịch #<số>" nhé — số là mã lịch hẹn
+                    trong danh sách khi anh nhắn "Lyly lịch hẹn" ạ.
+      - conditions:
+          - condition: template
+            value_template: '{{ is_reminder }}'
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ rem_content != '' }}"
+            then:
+              - action: rest_command.reminder_save
+                data:
+                  group_id: '{{ reply_thread_id }}'
+                  content: '{{ rem_content }}'
+                  remind_at: '{{ rem_ts }}'
+                response_variable: rem_save_resp
+                continue_on_error: true
+              - variables:
+                  rem_confirm: >-
+                    {% if rem_save_resp is defined and rem_save_resp.status == 200 %}Dạ, em đã đặt lịch nhắc: {{ rem_when }} — {{ rem_content }} ạ. Đúng giờ em sẽ nhắn vào nhóm nhắc anh nhé.{% else %}Dạ, em chưa đặt được lịch — máy chủ dữ liệu chưa chạy hoặc HA chưa nạp rest_command mới. Anh thử lại sau ít phút giúp em nhé.{% endif %}
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: '{{ rem_confirm }}'
+            else:
+              - action: zalo_bot.send_message
+                data:
+                  type: '1'
+                  thread_id: '{{ reply_thread_id }}'
+                  account_selection: '+84334503457'
+                  message: >-
+                    Dạ, anh nhắn kiểu "Lyly nhắc tôi 9h uống nước" hoặc "Lyly
+                    nhắc tôi sau 30 phút kiểm tra máy" nhé.
+      - conditions:
+          - condition: template
+            value_template: '{{ is_reminder_list }}'
+        sequence:
+          - action: rest_command.reminders_list
+            data:
+              group_id: '{{ reply_thread_id }}'
+            response_variable: rem_list_resp
+            continue_on_error: true
+          - variables:
+              rem_list_text: >-
+                {% if rem_list_resp is defined and rem_list_resp.status == 200 and rem_list_resp.content is mapping and rem_list_resp.content.get('items') %}{% set ns = namespace(lines=['Dạ, các lịch hẹn sắp tới của nhóm mình ạ:']) %}{% for it in rem_list_resp.content.get('items') %}{% set ns.lines = ns.lines + ['• #' ~ it['id'] ~ ' — ' ~ (it['remind_at'] | timestamp_custom('%H:%M %d/%m/%Y')) ~ ': ' ~ it['content']] %}{% endfor %}{% set ns.lines = ns.lines + ['Muốn hủy lịch nào anh nhắn "Lyly hủy lịch #<số>" nhé.'] %}{{ ns.lines | join('\n') }}{% else %}Dạ, nhóm mình chưa có lịch hẹn nào đang chờ ạ. Anh nhắn "Lyly nhắc tôi 9h uống nước" để đặt lịch nhé.{% endif %}
+          - action: zalo_bot.send_message
+            data:
+              type: '1'
+              thread_id: '{{ reply_thread_id }}'
+              account_selection: '+84334503457'
+              message: '{{ rem_list_text }}'
+
+      - conditions:
+          - condition: template
+            value_template: '{{ learned_message != '''' }}'
+        sequence:
+          - action: zalo_bot.send_message
+            data:
+              type: '1'
+              thread_id: '{{ reply_thread_id }}'
+              account_selection: '+84334503457'
+              message: '{{ learned_message }}'
+      - conditions:
+          - condition: template
+            value_template: '{{ reply | trim != '''' }}'
+        sequence:
+          - action: zalo_bot.send_message
+            data:
+              type: '1'
+              thread_id: '{{ reply_thread_id }}'
+              account_selection: '+84334503457'
+              message: '{{ reply | trim }}'
+    default:
+      - condition: template
+        value_template: '{{ is_called }}'
+      - action: conversation.process
+        data:
+          text: >
+            Bạn là {{ bot_name }}, trợ lý AI thân thiện trong nhóm Zalo.
+
+
+            CÂU HỎI:
+
+            {{ user_message }}
+
+
+            DỮ LIỆU ĐÃ HỌC CHO MÃ XUẤT HIỆN TRONG CÂU (nếu có thì ưu tiên dùng,
+            nó mới hơn kiến thức chung):
+
+            {{ learned_message }}
+
+
+            {{ ai_ctx }}
+
+
+            QUY TẮC TRẢ LỜI:
+
+            0. PHONG CÁCH BẮT BUỘC: nói năng nhẹ nhàng, ngọt ngào, lễ phép
+            kiểu miền Nam: mở đầu bằng "Dạ", xưng "em", gọi người hỏi là
+            "anh" (chỉ gọi "anh", không dùng "anh/chị") khi hợp ngữ cảnh, dùng dạ/vâng. Chỉ trả lời ĐÚNG chủ
+            đề được hỏi, NGẮN GỌN, súc tích (thường dưới 120 từ), không
+            lan man, không lặp lại câu hỏi, không trả lời sang chuyện
+            khác.
+
+            1. Trả lời trực tiếp, ngắn gọn, đúng trọng tâm, phù hợp gửi lên
+            Zalo.
+
+            2. Có thể trả lời mọi lĩnh vực: kỹ thuật, điện, điện tử, PLC, tự
+            động hóa, cơ khí, máy in, IT, lập trình, mạng, AI, khoa học, toán,
+            lịch sử, địa lý, đời sống, dịch thuật, viết nội dung...
+
+            3. Câu hỏi kỹ thuật: hướng dẫn từng bước, dễ thực hiện.
+
+            4. Câu hỏi tính toán: nêu công thức, phép tính và kết quả.
+
+            5. Câu hỏi so sánh: trình bày rõ ràng, có thể dùng bảng.
+
+            6. Chỉ trả lời bằng thông tin chắc chắn. Nếu thật sự không trả lời được thì nói ngắn gọn "Dạ, phần này em chưa rõ ạ" — không hỏi ngược lại, không xin thêm chi tiết.
+
+            7. Không tự bịa, không suy đoán. Chi tiết nào không chắc chắn thì bỏ qua hẳn, không nêu ra trong câu trả lời.
+
+            8. Với điện, máy móc, hóa chất hoặc thiết bị nguy hiểm: luôn đưa
+            cảnh báo an toàn phù hợp.
+
+            9. Không nhắc lại @Aibot, không chào hỏi dài dòng.
+          agent_id: conversation.gemini_tu_dong_ai_agent
+          conversation_id: 'print-{{ reply_thread_id }}-{{ mem_epoch }}'
+        response_variable: ai_response
+      - variables:
+          ai_message: >
+            {{ ai_response.response.speech.plain.speech | default('') | string |
+            trim }}
+      - condition: template
+        value_template: '{{ ai_message != '''' }}'
+      - action: zalo_bot.send_message
+        data:
+          type: '1'
+          thread_id: '{{ reply_thread_id }}'
+          account_selection: '+84334503457'
+          message: '{{ ai_message }}'
+mode: queued
+max: 10
