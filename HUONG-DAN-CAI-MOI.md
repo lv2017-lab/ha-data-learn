@@ -152,3 +152,5 @@ Cách dùng trong nhóm:
 
 Test nhanh: nhắn `Lyly nhắc tôi sau 1 phút uống nước` — khoảng 1 phút sau
 bot gửi "⏰ Nhắc anh: uống nước" vào nhóm là đạt.
+
+Bản V8.1 (thay file automation ở bước 3 bằng learn-data-bot-v8-1.yaml): hiểu thêm cách nói "2 phút sau", "5 phút nữa", "uống nước sau 2 phút" — trước đó chỉ hiểu "sau 2 phút".
