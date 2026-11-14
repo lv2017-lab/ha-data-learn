@@ -3,7 +3,7 @@
 #   rest_command: !include rest_command.yaml
 # Vi la file include nen KHONG co khoa "rest_command:" o dau file.
 # Thay IP-HASS bang IP LAN cua chinh may HAOS (IP ban mo HA trong mang LAN,
-# khong phai ten mien lv2017.io.vn). Neu add-on khong dat token thi giu nguyen
+# khong phai ten mien tenmien.io.vn). Neu add-on khong dat token thi giu nguyen
 # cac dong comment headers. Neu co dat token thi xoa dau # o 2 dong headers.
 
 print_learn_save:

@@ -68,10 +68,12 @@ cũ) → ⋮ → **Edit in YAML** → Ctrl+A → dán `learn-data-bot-v8-2.yaml`
 
 - Chỉ giữ **MỘT** automation bot trên webhook này; tắt/xóa mọi bản cũ
   (V7, V8, V8.1...) — chạy 2 bản là bot trả lời trùng / bay sang nhóm khác.
-- Giữ nguyên `local_only: false` (Zalo gọi webhook từ xa).
-- Thêm nhóm mới: trong `conditions:` của automation, thay `GROUP_ID_2`,
+- Giữ nguyên `local_only: false` 
+- Thay webhook zalo của bạn vào
+- Thay tất cả các dòng có số điện thoại "+84xxxxxx" bằng số zalo của mình.
+- Dán ID nhóm vào đây: trong `conditions:` của automation, thay `GROUP_ID_2`,
   `GROUP_ID_3`, `GROUP_ID_4` bằng ID thật của nhóm. Nhóm 1 đã có sẵn
-  `5983799972549184973`.
+  `598379997254918XXXX`.
 
 **Automation 2 (gửi nhắc hẹn):** tạo thêm một automation mới, dán
 `learn-data-bot-reminder-sender.yaml` → Save. Automation này chạy mỗi phút,

@@ -2553,14 +2553,14 @@ actions:
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: '{{ img_send_text }}'
             else:
               - action: zalo_bot.send_message
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: >-
                     Dạ em chưa đọc được ảnh này, anh gửi lại giúp em
                     nhé.
@@ -2603,7 +2603,7 @@ actions:
                     data:
                       type: '1'
                       thread_id: '{{ reply_thread_id }}'
-                      account_selection: '+84334503457'
+                      account_selection: '+84xxxxxxxx'
                       message: '{{ img_reply1 }}'
           - if:
               - condition: template
@@ -2629,7 +2629,7 @@ actions:
                     data:
                       type: '1'
                       thread_id: '{{ reply_thread_id }}'
-                      account_selection: '+84334503457'
+                      account_selection: '+84xxxxxxxx'
                       message: '{{ img_reply2 }}'
       - conditions:
           - condition: template
@@ -2657,7 +2657,7 @@ actions:
                     data:
                       type: '1'
                       thread_id: '{{ reply_thread_id }}'
-                      account_selection: '+84334503457'
+                      account_selection: '+84xxxxxxxx'
                       message: '{{ del_confirm }}'
               - conditions:
                   - condition: template
@@ -2682,14 +2682,14 @@ actions:
                     data:
                       type: '1'
                       thread_id: '{{ reply_thread_id }}'
-                      account_selection: '+84334503457'
+                      account_selection: '+84xxxxxxxx'
                       message: '{{ del_confirm }}'
             default:
               - action: zalo_bot.send_message
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: >-
                     Chưa rõ cần xóa gì. Xóa 1 dòng: @Aibot xóa nhật ký <số #>
                     (số # xem khi tra nhật ký). Xóa cả 1 ngày: @Aibot xóa nhật
@@ -2733,14 +2733,14 @@ actions:
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: '{{ edit_confirm }}'
             else:
               - action: zalo_bot.send_message
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: >-
                     Dạ, sửa nhật ký gõ dạng: @Aibot sửa nhật ký <số #>:
                     <Thiết bị> | <Vị trí> | <Máy> | <Ghi chú> | <Ngày>. Ô
@@ -2772,7 +2772,7 @@ actions:
             data:
               type: '1'
               thread_id: '{{ reply_thread_id }}'
-              account_selection: '+84334503457'
+              account_selection: '+84xxxxxxxx'
               message: '{{ logs_message }}'
       - conditions:
           - condition: template
@@ -2805,14 +2805,14 @@ actions:
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: '{{ log_confirm }}'
             else:
               - action: zalo_bot.send_message
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: >-
                     Chưa ghi được: gõ dạng @Aibot nhật ký: <Tên thiết bị> |
                     <Vị trí> | <Máy DC1-DC4> | <Ghi chú> | <Ngày nếu khác hôm
@@ -2835,7 +2835,7 @@ actions:
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: >-
                     Đã xóa mã đã học {{ request_code }}. Nếu mã này có trong
                     kho gốc, bot quay về nội dung gốc.
@@ -2844,7 +2844,7 @@ actions:
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: 'Chưa xóa được: thiếu mã lỗi. Gõ dạng: @Aibot xóa học E999'
       - conditions:
           - condition: template
@@ -2877,7 +2877,7 @@ actions:
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: >-
                     Dạ, xong rồi ạ. Từ nay anh gọi em là: {{
                     names_now | join(', ') }} — gọi đúng một trong các
@@ -2922,7 +2922,7 @@ actions:
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: >-
                     Dạ, xong rồi ạ. Từ nay anh gọi em là: {{
                     names_now | join(', ') }} — gọi đúng một trong các
@@ -2967,7 +2967,7 @@ actions:
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: >-
                     Dạ, xong rồi ạ. Từ nay anh gọi em là: {{
                     names_now | join(', ') }} — gọi đúng một trong các
@@ -2999,7 +2999,7 @@ actions:
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: >-
                     Dạ, em đã xóa toàn bộ phần ghi nhớ trò chuyện của
                     nhóm mình rồi ạ. Từ giờ mình trò chuyện lại từ đầu
@@ -3039,14 +3039,14 @@ actions:
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: '{{ learn_confirm }}'
             else:
               - action: zalo_bot.send_message
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: >-
                     Chưa lưu được: gõ dạng @Aibot học E999: <nội dung đầy đủ
                     của mã đó>
@@ -3071,14 +3071,14 @@ actions:
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: '{{ rem_del_text }}'
             else:
               - action: zalo_bot.send_message
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: >-
                     Dạ, anh nhắn "Lyly hủy lịch #<số>" nhé — số là mã lịch hẹn
                     trong danh sách khi anh nhắn "Lyly lịch hẹn" ạ.
@@ -3104,14 +3104,14 @@ actions:
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: '{{ rem_confirm }}'
             else:
               - action: zalo_bot.send_message
                 data:
                   type: '1'
                   thread_id: '{{ reply_thread_id }}'
-                  account_selection: '+84334503457'
+                  account_selection: '+84xxxxxxxx'
                   message: >-
                     Dạ, anh nhắn kiểu "Lyly nhắc tôi 9h uống nước" hoặc "Lyly
                     nhắc tôi sau 30 phút kiểm tra máy" nhé.
@@ -3131,7 +3131,7 @@ actions:
             data:
               type: '1'
               thread_id: '{{ reply_thread_id }}'
-              account_selection: '+84334503457'
+              account_selection: '+84xxxxxxxx'
               message: '{{ rem_list_text }}'
 
       - conditions:
@@ -3142,7 +3142,7 @@ actions:
             data:
               type: '1'
               thread_id: '{{ reply_thread_id }}'
-              account_selection: '+84334503457'
+              account_selection: '+84xxxxxxxx'
               message: '{{ learned_message }}'
       - conditions:
           - condition: template
@@ -3152,7 +3152,7 @@ actions:
             data:
               type: '1'
               thread_id: '{{ reply_thread_id }}'
-              account_selection: '+84334503457'
+              account_selection: '+84xxxxxxxx'
               message: '{{ reply | trim }}'
     default:
       - condition: template
@@ -3220,7 +3220,7 @@ actions:
         data:
           type: '1'
           thread_id: '{{ reply_thread_id }}'
-          account_selection: '+84334503457'
+          account_selection: '+84xxxxxxxx'
           message: '{{ ai_message }}'
 mode: queued
 max: 10
